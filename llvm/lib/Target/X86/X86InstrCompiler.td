@@ -66,6 +66,44 @@ def ADJCALLSTACKUP64   : I<0, Pseudo, (outs), (ins i32imm:$amt1, i32imm:$amt2),
 def : Pat<(X86callseq_start timm:$amt1, timm:$amt2),
         (ADJCALLSTACKDOWN64 i32imm:$amt1, i32imm:$amt2, 0)>, Requires<[IsLP64]>;
 
+def ADJARGSIZE : I<0, Pseudo, (outs),
+                           (ins i32imm:$amt1),
+                           "#ADJARGSIZE", []>, Requires<[IsLP64]>;
+
+def INSBTRAS : I<0, Pseudo, (outs),
+                           (ins i32imm:$amt1, i32imm:$amt2, i32imm:$spadj),
+                           "#INSBTRAS", []>, Requires<[IsLP64]>;
+
+// A list of booby trap targets enclosed in {} and separated by comma.
+// Used by X86rad_setup only.
+//def BtListAsmOperand : AsmOperandClass { let Name = "BtList"; }
+//def btlist : Operand<i32> {
+//  let ParserMatchClass = BtListAsmOperand;
+//}
+
+let Defs = [RSP, EFLAGS, SSP], Uses = [RSP, SSP], SchedRW = [WriteALU] in {
+
+def BTRASETUP   : I<0, Pseudo, (outs), (ins i32imm:$before, i32imm:$after),
+                           "#BTRASETUP $before, $after",
+                           [(X86rad_setup imm:$before, imm:$after)]>;
+
+def BTRATEARDOWN   : I<0, Pseudo, (outs), (ins i32imm:$before),
+                           "#BTRATEARDOWN $before",
+                           [(X86rad_teardown imm:$before)]>;
+}
+
+let Defs = [RSP, RBP, EFLAGS, SSP], Uses = [RSP, SSP], SchedRW = [WriteALU] in {
+
+def BTRASETUPWITHFP   : I<0, Pseudo, (outs), (ins i32imm:$before, i32imm:$after),
+                           "#BTRASETUPWITHFP $before, $after",
+                           [(X86rad_setup_with_fp imm:$before, imm:$after)]>;
+
+def BTRATEARDOWNWITHFP   : I<0, Pseudo, (outs), (ins i32imm:$before),
+                           "#BTRATEARDOWNWITHFP $before",
+                           [(X86rad_teardown_with_fp imm:$before)]>;
+}
+
+
 let SchedRW = [WriteSystem] in {
 
 // x86-64 va_start lowering magic.

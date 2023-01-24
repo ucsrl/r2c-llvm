@@ -327,19 +327,6 @@ void TargetLoweringObjectFileELF::emitModuleMetadata(MCStreamer &Streamer,
   SmallVector<Module::ModuleFlagEntry, 8> ModuleFlags;
   M.getModuleFlagsMetadata(ModuleFlags);
 
-  MDNode *CFGProfile = nullptr;
-
-  for (const auto &MFE : ModuleFlags) {
-    StringRef Key = MFE.Key->getString();
-    if (Key == "CG Profile") {
-      CFGProfile = cast<MDNode>(MFE.Val);
-      break;
-    }
-  }
-
-  if (!CFGProfile)
-    return;
-
   auto GetSym = [this](const MDOperand &MDO) -> MCSymbol * {
     if (!MDO)
       return nullptr;
@@ -347,6 +334,42 @@ void TargetLoweringObjectFileELF::emitModuleMetadata(MCStreamer &Streamer,
     const Function *F = cast<Function>(V->getValue());
     return TM->getSymbol(F);
   };
+
+  MDNode *R2CInfo = nullptr;
+
+  for (const auto &MFE : ModuleFlags) {
+    StringRef Key = MFE.Key->getString();
+    if (Key == "R2C Info") {
+      R2CInfo = cast<MDNode>(MFE.Val);
+    }
+  }
+
+  if (R2CInfo) {
+    for (const auto &Entry : R2CInfo->operands()) {
+      MDNode *E = cast<MDNode>(Entry);
+      const MCSymbol *From = GetSym(E->getOperand(0));
+      if (!From) continue;
+
+      uint64_t Count = cast<ConstantAsMetadata>(E->getOperand(1))
+                           ->getValue()
+                           ->getUniqueInteger()
+                           .getZExtValue();
+      Streamer.emitR2CInfoEntry(
+          MCSymbolRefExpr::create(From, MCSymbolRefExpr::VK_None, C), Count);
+    }
+  }
+
+  MDNode *CFGProfile = nullptr;
+
+  for (const auto &MFE : ModuleFlags) {
+    StringRef Key = MFE.Key->getString();
+    if (Key == "CG Profile") {
+      CFGProfile = cast<MDNode>(MFE.Val);
+    }
+  }
+
+  if (!CFGProfile)
+    return;
 
   for (const auto &Edge : CFGProfile->operands()) {
     MDNode *E = cast<MDNode>(Edge);

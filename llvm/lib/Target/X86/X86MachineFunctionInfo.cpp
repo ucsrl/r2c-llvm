@@ -8,8 +8,10 @@
 
 #include "X86MachineFunctionInfo.h"
 #include "X86RegisterInfo.h"
+#include "X86Subtarget.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include <llvm/R2COptions/R2COptions.h>
 
 using namespace llvm;
 
@@ -28,3 +30,21 @@ void X86MachineFunctionInfo::setRestoreBasePointer(const MachineFunction *MF) {
   }
 }
 
+unsigned
+X86MachineFunctionInfo::getNumAfterDecoys(const MachineFunction *MF) const {
+  const Function &Fn = MF->getFunction();
+  unsigned int NumAfterDecoys = 0;
+  if (!r2c::Implementation.hasFlag(r2c::ImplementationFlags::DisableDiversity)) {
+    size_t ReserveSpace = 0;
+    if (Fn.hasFnAttribute("diversity-btra-space-for")) {
+      Fn.getAttributes()
+          .getFnAttributes()
+          .getAttribute("diversity-btra-space-for")
+          .getValueAsString()
+          .getAsInteger(10, ReserveSpace);
+    }
+    NumAfterDecoys = ReserveSpace;
+  }
+
+  return NumAfterDecoys;
+}

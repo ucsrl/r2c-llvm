@@ -120,7 +120,7 @@ namespace llvm {
           GuaranteedTailCallOpt(false), StackSymbolOrdering(true),
           EnableFastISel(false), EnableGlobalISel(false), UseInitArray(false),
           DisableIntegratedAS(false), RelaxELFRelocations(false),
-          FunctionSections(false), DataSections(false),
+          FunctionSections(false), DataSections(false), NoopInsertion(false),
           UniqueSectionNames(true), UniqueBasicBlockSectionNames(false),
           TrapUnreachable(false), NoTrapAfterNoreturn(false), TLSSize(0),
           EmulatedTLS(false), ExplicitEmulatedTLS(false), EnableIPRA(false),
@@ -231,6 +231,11 @@ namespace llvm {
 
     /// Emit data into separate sections.
     unsigned DataSections : 1;
+
+
+    /// Randomly insert noop instructions to create fine-grained code
+    /// layout diversity.
+    unsigned NoopInsertion : 1;
 
     unsigned UniqueSectionNames : 1;
 

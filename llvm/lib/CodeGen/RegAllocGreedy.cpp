@@ -759,7 +759,11 @@ Register RAGreedy::tryAssign(LiveInterval &VirtReg,
   Order.rewind();
   Register PhysReg;
   while ((PhysReg = Order.next()))
-    if (!Matrix->checkInterference(VirtReg, PhysReg))
+    if (r2c::RandomizeRegAlloc && VirtReg.empty()) {
+      unsigned Cost = TRI->getCostPerUse(PhysReg);
+      if (Cost == 0)
+        break;
+    } else if (!Matrix->checkInterference(VirtReg, PhysReg))
       break;
   if (!PhysReg || Order.isHint())
     return PhysReg;

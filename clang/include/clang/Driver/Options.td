@@ -3438,6 +3438,12 @@ defm stack_arrays : BooleanFFlag<"stack-arrays">, Group<gfortran_Group>;
 defm underscoring : BooleanFFlag<"underscoring">, Group<gfortran_Group>;
 defm whole_file : BooleanFFlag<"whole-file">, Group<gfortran_Group>;
 
+def r2c_Group : OptionGroup<"R2C Group">;
+def fheap_boobytraps : Joined<["-"], "fheap-boobytraps=">, Group<r2c_Group>;
+def fbtras : Joined<["-"], "fbtras=">, Group<r2c_Group>;
+defm harden_heap_boobytraps : BooleanFFlag<"harden-heap-boobytraps">, Group<r2c_Group>;
+
+
 // C++ SYCL options
 def fsycl : Flag<["-"], "fsycl">, Group<sycl_Group>, Flags<[CC1Option, CoreOption]>,
   HelpText<"Enable SYCL kernels compilation for device">;

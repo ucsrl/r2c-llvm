@@ -758,6 +758,9 @@ void MCStreamer::emitCGProfileEntry(const MCSymbolRefExpr *From,
                                     const MCSymbolRefExpr *To, uint64_t Count) {
 }
 
+void MCStreamer::emitR2CInfoEntry(const MCSymbolRefExpr *From, uint32_t Count) {
+}
+
 static MCSection *getWinCFISection(MCContext &Context, unsigned *NextWinCFIID,
                                    MCSection *MainCFISec,
                                    const MCSection *TextSec) {

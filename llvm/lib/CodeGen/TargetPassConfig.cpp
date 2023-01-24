@@ -769,6 +769,9 @@ void TargetPassConfig::addCodeGenPrepare() {
 void TargetPassConfig::addISelPrepare() {
   addPreISel();
 
+  // Randomize globals
+  addPass(createGlobalRandomizationPass());
+
   // Force codegen to run according to the callgraph.
   if (requiresCodeGenSCCOrder())
     addPass(new DummyCGSCCPass);
@@ -1002,6 +1005,9 @@ void TargetPassConfig::addMachinePasses() {
     if (PrintGCInfo)
       addPass(createGCInfoPrinter(dbgs()), false, false);
   }
+
+  if (TM->Options.NoopInsertion)
+    addPass(&NoopInsertionID);
 
   // Basic block placement.
   if (getOptLevel() != CodeGenOpt::None)

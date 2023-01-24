@@ -1121,6 +1121,13 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
                     .Default(SaveTempsCwd);
   }
 
+  // expand TARGET in sysroot path
+  if (!SysRoot.empty()) {
+    size_t pos{0};
+    while ((pos = SysRoot.find("TARGET", pos)) != std::string::npos)
+      SysRoot.replace(pos, 6, TargetTriple);
+  }
+
   setLTOMode(Args);
 
   // Process -fembed-bitcode= flags.

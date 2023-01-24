@@ -14,6 +14,7 @@
 #define LLVM_LIB_TARGET_X86_X86FRAMELOWERING_H
 
 #include "llvm/CodeGen/TargetFrameLowering.h"
+#include <llvm/Support/RandomNumberGenerator.h>
 
 namespace llvm {
 

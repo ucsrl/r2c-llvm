@@ -3058,7 +3058,8 @@ void AssemblyWriter::printFunctionSummary(const FunctionSummary *FS) {
 
   FunctionSummary::FFlags FFlags = FS->fflags();
   if (FFlags.ReadNone | FFlags.ReadOnly | FFlags.NoRecurse |
-      FFlags.ReturnDoesNotAlias | FFlags.NoInline | FFlags.AlwaysInline) {
+      FFlags.ReturnDoesNotAlias | FFlags.NoInline | FFlags.AlwaysInline |
+      FFlags.BTRA) {
     Out << ", funcFlags: (";
     Out << "readNone: " << FFlags.ReadNone;
     Out << ", readOnly: " << FFlags.ReadOnly;
@@ -3066,6 +3067,7 @@ void AssemblyWriter::printFunctionSummary(const FunctionSummary *FS) {
     Out << ", returnDoesNotAlias: " << FFlags.ReturnDoesNotAlias;
     Out << ", noInline: " << FFlags.NoInline;
     Out << ", alwaysInline: " << FFlags.AlwaysInline;
+    Out << ", BTRA: " << FFlags.BTRA;
     Out << ")";
   }
   if (!FS->calls().empty()) {

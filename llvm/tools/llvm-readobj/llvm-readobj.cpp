@@ -348,6 +348,8 @@ namespace opts {
   // --cg-profile
   cl::opt<bool> CGProfile("cg-profile",
                           cl::desc("Display callgraph profile section"));
+  cl::opt<bool> R2CInfo("r2c-info",
+                        cl::desc("Display R2C info section"));
   cl::alias ELFCGProfile("elf-cg-profile", cl::desc("Alias for --cg-profile"),
                          cl::aliasopt(CGProfile));
 
@@ -508,6 +510,8 @@ static void dumpObject(const ObjectFile *Obj, ScopedPrinter &Writer,
       Dumper->printHashHistograms();
     if (opts::CGProfile)
       Dumper->printCGProfile();
+    if (opts::R2CInfo)
+      Dumper->printR2CInfo();
     if (opts::Addrsig)
       Dumper->printAddrsig();
     if (opts::Notes)
@@ -530,6 +534,8 @@ static void dumpObject(const ObjectFile *Obj, ScopedPrinter &Writer,
       Dumper->printCOFFLoadConfig();
     if (opts::CGProfile)
       Dumper->printCGProfile();
+    if (opts::R2CInfo)
+      Dumper->printR2CInfo();
     if (opts::Addrsig)
       Dumper->printAddrsig();
     if (opts::CodeView)

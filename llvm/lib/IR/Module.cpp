@@ -87,9 +87,11 @@ Module::~Module() {
   IFuncList.clear();
 }
 
-std::unique_ptr<RandomNumberGenerator>
-Module::createRNG(const StringRef Name) const {
-  SmallString<32> Salt(Name);
+// Taken from the multicompiler project https://github.com/securesystemslab/multicompiler
+RandomNumberGenerator *Module::createRNG(const Pass* P) const {
+  SmallString<32> Salt;
+  if (P != 0)
+    Salt += P->getPassName();
 
   // This RNG is guaranteed to produce the same random stream only
   // when the Module ID and thus the input filename is the same. This
@@ -103,9 +105,9 @@ Module::createRNG(const StringRef Name) const {
   // store salt metadata from the Module constructor.
   Salt += sys::path::filename(getModuleIdentifier());
 
-  return std::unique_ptr<RandomNumberGenerator>(
-      new RandomNumberGenerator(Salt));
+  return new RandomNumberGenerator(Salt);
 }
+
 
 /// getNamedValue - Return the first global value in the module with
 /// the specified name, of arbitrary type.  This method returns null

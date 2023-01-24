@@ -19,6 +19,9 @@
 /* Define to 1 to enable crash memory dumps, and to 0 otherwise. */
 #cmakedefine01 LLVM_ENABLE_CRASH_DUMPS
 
+/* Define if using openssl */
+#cmakedefine01 LLVM_ENABLE_OPENSSL
+
 /* Define to 1 if you have the `backtrace' function. */
 #cmakedefine HAVE_BACKTRACE ${HAVE_BACKTRACE}
 
@@ -93,6 +96,9 @@
 
 /* Define to 1 if you have the `isatty' function. */
 #cmakedefine HAVE_ISATTY 1
+
+/* Define to 1 if you have the 'openssl' library (-lcrypto). */
+#cmakedefine HAVE_OPENSSL ${HAVE_OPENSSL}
 
 /* Define to 1 if you have the `edit' library (-ledit). */
 #cmakedefine HAVE_LIBEDIT ${HAVE_LIBEDIT}

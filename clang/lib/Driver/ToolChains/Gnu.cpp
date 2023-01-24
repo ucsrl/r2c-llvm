@@ -27,6 +27,7 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/TargetParser.h"
 #include "llvm/Support/VirtualFileSystem.h"
+#include <clang/Driver/OptionUtils.h>
 #include <system_error>
 
 using namespace clang::driver;
@@ -561,6 +562,20 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     assert(!Inputs.empty() && "Must have at least one input.");
     addLTOOptions(ToolChain, Args, CmdArgs, Output, Inputs[0],
                   D.getLTOMode() == LTOK_Thin);
+  }
+
+  if (Args.hasArg(options::OPT_fheap_boobytraps)) {
+    unsigned NumHeapBoobyTraps = getLastArgIntValue(Args, options::OPT_fheap_boobytraps, 0);
+    if (NumHeapBoobyTraps > 0) {
+      addHeapBoobyTrapRT(ToolChain, Args, CmdArgs);
+    }
+  }
+
+  if (Args.hasArg(options::OPT_fbtras)) {
+    unsigned NumBTRAs = getLastArgIntValue(Args, options::OPT_fbtras, 0);
+    if (NumBTRAs > 0) {
+      addBoobyTrapRT(ToolChain, Args, CmdArgs);
+    }
   }
 
   if (Args.hasArg(options::OPT_Z_Xlinker__no_demangle))

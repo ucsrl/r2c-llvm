@@ -8491,6 +8491,12 @@ bool LLParser::ParseOptionalFFlags(FunctionSummary::FFlags &FFlags) {
         return true;
       FFlags.AlwaysInline = Val;
       break;
+    case lltok::kw_R2C:
+        Lex.Lex();
+        if (ParseToken(lltok::colon, "expected ':'") || ParseFlag(Val))
+            return true;
+        FFlags.BTRA = Val;
+        break;
     default:
       return Error(Lex.getLoc(), "expected function flag type");
     }

@@ -381,6 +381,11 @@ namespace llvm {
   /// the intrinsic for later emission to the StackMap.
   extern char &StackMapLivenessID;
 
+
+  /// NoopInsertion - This pass adds fine-grained diversity by displacing code
+  /// using randomly placed (optionally target supplied) Noop instructions.
+  extern char &NoopInsertionID;
+
   /// LiveDebugValues pass
   extern char &LiveDebugValuesID;
 
@@ -486,6 +491,11 @@ namespace llvm {
   /// The pass fixups statepoint machine instruction to replace usage of
   /// caller saved registers with stack slots.
   extern char &FixupStatepointCallerSavedID;
+
+  /// createGlobalRandomizationPass - This pass randomizes the ordering of
+  /// global variables and adds random padding between globals.
+  ModulePass *createGlobalRandomizationPass();
+
 } // End llvm namespace
 
 #endif

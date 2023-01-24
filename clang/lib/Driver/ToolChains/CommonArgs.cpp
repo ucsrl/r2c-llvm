@@ -32,6 +32,7 @@
 #include "clang/Driver/ToolChain.h"
 #include "clang/Driver/Util.h"
 #include "clang/Driver/XRayArgs.h"
+#include "clang/Driver/OptionUtils.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -387,6 +388,25 @@ bool tools::isUseSeparateSections(const llvm::Triple &Triple) {
   return Triple.getOS() == llvm::Triple::CloudABI;
 }
 
+void tools::addBoobyTrapRT(const ToolChain &TC, const ArgList &Args,
+                               ArgStringList &CmdArgs) {
+  CmdArgs.push_back("-whole-archive");
+  CmdArgs.push_back(TC.getCompilerRTArgString(Args, "boobytraps"));
+  CmdArgs.push_back("-no-whole-archive");
+}
+
+
+void tools::addHeapBoobyTrapRT(const ToolChain &TC, const ArgList &Args,
+                               ArgStringList &CmdArgs) {
+  CmdArgs.push_back("-whole-archive");
+  if (Args.hasFlag(options::OPT_fharden_heap_boobytraps, options::OPT_fno_harden_heap_boobytraps, true)) {
+    CmdArgs.push_back(TC.getCompilerRTArgString(Args, "hardened_heap_boobytraps"));
+  } else {
+    CmdArgs.push_back(TC.getCompilerRTArgString(Args, "heap_boobytraps"));
+  }
+  CmdArgs.push_back("-no-whole-archive");
+}
+
 void tools::addLTOOptions(const ToolChain &ToolChain, const ArgList &Args,
                           ArgStringList &CmdArgs, const InputInfo &Output,
                           const InputInfo &Input, bool IsThinLTO) {
@@ -464,6 +484,28 @@ void tools::addLTOOptions(const ToolChain &ToolChain, const ArgList &Args,
       CmdArgs.push_back("-plugin-opt=-debugger-tune=sce");
     else
       CmdArgs.push_back("-plugin-opt=-debugger-tune=gdb");
+  }
+
+  if (Args.hasArg(options::OPT_fbtras)) {
+    StringRef BTRAs = Args.getLastArg(options::OPT_fbtras)->getValue();
+    CmdArgs.push_back(Args.MakeArgString("-plugin-opt=-diversity-mode=3"));
+    CmdArgs.push_back(
+        Args.MakeArgString("-plugin-opt=-num-btras=" + Twine(BTRAs)));
+  }
+
+  if (Args.hasArg(options::OPT_fheap_boobytraps)) {
+    StringRef HeapBoobyTraps =
+        Args.getLastArg(options::OPT_fheap_boobytraps)->getValue();
+    bool dontHarden =
+        !Args.hasFlag(options::OPT_fharden_heap_boobytraps,
+                      options::OPT_fno_harden_heap_boobytraps, true);
+
+    if (dontHarden) {
+      CmdArgs.push_back(
+          Args.MakeArgString("-plugin-opt=-harden-heap-boobytraps=false"));
+    }
+    CmdArgs.push_back(Args.MakeArgString(
+        "-plugin-opt=-max-heap-ptr-boobytraps=" + Twine(HeapBoobyTraps)));
   }
 
   bool UseSeparateSections =

@@ -1019,6 +1019,7 @@ static uint64_t getEncodedFFlags(FunctionSummary::FFlags Flags) {
   RawFlags |= (Flags.ReturnDoesNotAlias << 3);
   RawFlags |= (Flags.NoInline << 4);
   RawFlags |= (Flags.AlwaysInline << 5);
+  RawFlags |= (Flags.BTRA << 5);
   return RawFlags;
 }
 

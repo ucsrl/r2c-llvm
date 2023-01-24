@@ -48,6 +48,7 @@
 #include "llvm/Transforms/Vectorize/LoopVectorize.h"
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
+#include <llvm/Transforms/R2C.h>
 
 using namespace llvm;
 
@@ -494,6 +495,7 @@ void PassManagerBuilder::populateModulePassManager(
 
   // Allow forcing function attributes as a debugging and tuning aid.
   MPM.add(createForceFunctionAttrsLegacyPass());
+  MPM.add(createR2CMarkerPass());
 
   // If all optimizations are disabled, just run the always-inline pass and,
   // if enabled, the function merging pass.
@@ -1100,6 +1102,12 @@ void PassManagerBuilder::populateThinLTOPassManager(
 
   populateModulePassManager(PM);
 
+  if (ImportSummary) {
+    PM.add(createDiversityPass(ImportSummary));
+  }
+
+  PM.add(createHeapBoobyTrapPass());
+
   if (VerifyOutput)
     PM.add(createVerifierPass());
   PerformThinLTO = false;
@@ -1122,6 +1130,10 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
     // intrinsic itself and handle it in the summary.
     PM.add(createWholeProgramDevirtPass(ExportSummary, nullptr));
   }
+
+  PM.add(createCollectStatisticsPass());
+  PM.add(createDiversityPass(nullptr));
+  PM.add(createHeapBoobyTrapPass());
 
   // Create a function that performs CFI checks for cross-DSO calls with targets
   // in the current module.

@@ -989,32 +989,35 @@ public:
                                               bool isVol, bool AlwaysInline,
                                               bool isTailCall,
                                               MachinePointerInfo DstPtrInfo,
-                                              MachinePointerInfo SrcPtrInfo),
+                                              MachinePointerInfo SrcPtrInfo,
+                                              const CallInst *I = nullptr),
                             "Use the version that takes Align instead") {
     return getMemcpy(Chain, dl, Dst, Src, Size, llvm::Align(Align), isVol,
-                     AlwaysInline, isTailCall, DstPtrInfo, SrcPtrInfo);
+                     AlwaysInline, isTailCall, DstPtrInfo, SrcPtrInfo, I);
   }
 
   SDValue getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                     SDValue Size, Align Alignment, bool isVol,
                     bool AlwaysInline, bool isTailCall,
                     MachinePointerInfo DstPtrInfo,
-                    MachinePointerInfo SrcPtrInfo);
+                    MachinePointerInfo SrcPtrInfo, const CallInst *I = nullptr);
 
   LLVM_ATTRIBUTE_DEPRECATED(SDValue getMemmove(SDValue Chain, const SDLoc &dl,
                                                SDValue Dst, SDValue Src,
                                                SDValue Size, unsigned Align,
                                                bool isVol, bool isTailCall,
                                                MachinePointerInfo DstPtrInfo,
-                                               MachinePointerInfo SrcPtrInfo),
+                                               MachinePointerInfo SrcPtrInfo,
+                                               const CallInst *I = nullptr),
                             "Use the version that takes Align instead") {
     return getMemmove(Chain, dl, Dst, Src, Size, llvm::Align(Align), isVol,
-                      isTailCall, DstPtrInfo, SrcPtrInfo);
+                      isTailCall, DstPtrInfo, SrcPtrInfo, I);
   }
   SDValue getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                      SDValue Size, Align Alignment, bool isVol, bool isTailCall,
                      MachinePointerInfo DstPtrInfo,
-                     MachinePointerInfo SrcPtrInfo);
+                     MachinePointerInfo SrcPtrInfo,
+                     const CallInst *I = nullptr);
 
   LLVM_ATTRIBUTE_DEPRECATED(SDValue getMemset(SDValue Chain, const SDLoc &dl,
                                               SDValue Dst, SDValue Src,
@@ -1027,7 +1030,7 @@ public:
   }
   SDValue getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                     SDValue Size, Align Alignment, bool isVol, bool isTailCall,
-                    MachinePointerInfo DstPtrInfo);
+                    MachinePointerInfo DstPtrInfo, const CallInst *I = nullptr);
 
   SDValue getAtomicMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
                           unsigned DstAlign, SDValue Src, unsigned SrcAlign,

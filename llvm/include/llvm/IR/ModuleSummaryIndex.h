@@ -551,6 +551,7 @@ public:
     unsigned NoInline : 1;
     // Indicate if function should be always inlined.
     unsigned AlwaysInline : 1;
+    unsigned BTRA: 1;
   };
 
   /// Describes the uses of a parameter by the function.

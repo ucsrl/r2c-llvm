@@ -71,7 +71,10 @@ bool MachineFunctionPass::runOnFunction(Function &F) {
     CountBefore = MF.getInstructionCount();
 
   bool RV = runOnMachineFunction(MF);
-
+//  if (MF.getName() == "main") {
+//    errs() << "After Pass " << getPassName() << "\n";
+//    MF.dump();
+//  }
   if (ShouldEmitSizeRemarks) {
     // We wanted size remarks. Check if there was a change to the number of
     // MachineInstrs in the module. Emit a remark if there was a change.

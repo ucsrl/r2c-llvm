@@ -66,6 +66,7 @@ public:
   virtual void printGroupSections() {}
   virtual void printHashHistograms() {}
   virtual void printCGProfile() {}
+  virtual void printR2CInfo() {}
   virtual void printAddrsig() {}
   virtual void printNotes() {}
   virtual void printELFLinkerOptions() {}

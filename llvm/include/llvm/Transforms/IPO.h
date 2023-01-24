@@ -272,6 +272,8 @@ createWholeProgramDevirtPass(ModuleSummaryIndex *ExportSummary,
 /// devirtualization and control-flow integrity.
 ModulePass *createGlobalSplitPass();
 
+ModulePass *createCollectStatisticsPass();
+
 //===----------------------------------------------------------------------===//
 // SampleProfilePass - Loads sample profile data from disk and generates
 // IR metadata to reflect the profile.

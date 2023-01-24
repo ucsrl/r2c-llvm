@@ -46,7 +46,7 @@
 #include "llvm/Transforms/Scalar/LoopPassManager.h"
 #include "llvm/Transforms/Utils/FunctionImportUtils.h"
 #include "llvm/Transforms/Utils/SplitModule.h"
-
+#include "llvm/Support/RandomNumberGenerator.h"
 using namespace llvm;
 using namespace lto;
 
@@ -400,6 +400,7 @@ void codegen(const Config &Conf, TargetMachine *TM, AddStreamFn AddStream,
                               DwoOut ? &DwoOut->os() : nullptr,
                               Conf.CGFileType))
     report_fatal_error("Failed to setup codegen");
+
   CodeGenPasses.run(Mod);
 
   if (DwoOut)

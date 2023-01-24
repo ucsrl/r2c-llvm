@@ -6192,6 +6192,25 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(Str));
   }
 
+  if (Args.hasArg(options::OPT_fbtras)) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back(Args.MakeArgString("-diversity-mode=3"));
+  }
+
+  if (Args.hasArg(options::OPT_fheap_boobytraps)) {
+    StringRef HeapBoobyTraps = Args.getLastArg(options::OPT_fheap_boobytraps)->getValue();
+    bool dontHarden =
+        !Args.hasFlag(options::OPT_fharden_heap_boobytraps,
+                      options::OPT_fno_harden_heap_boobytraps, true);
+
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back(Args.MakeArgString("-max-heap-ptr-boobytraps=" + Twine(HeapBoobyTraps)));
+    if (dontHarden) {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(Args.MakeArgString("-harden-heap-boobytraps=false"));
+    }
+  }
+
   // Add the "-o out -x type src.c" flags last. This is done primarily to make
   // the -cc1 command easier to edit when reproducing compiler crashes.
   if (Output.getType() == types::TY_Dependencies) {

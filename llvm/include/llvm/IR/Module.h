@@ -265,7 +265,7 @@ public:
   /// when other randomness consuming passes are added or removed. In
   /// addition, the random stream will be reproducible across LLVM
   /// versions when the pass does not change.
-  std::unique_ptr<RandomNumberGenerator> createRNG(const StringRef Name) const;
+  RandomNumberGenerator *createRNG(const Pass* P) const;
 
   /// Return true if size-info optimization remark is enabled, false
   /// otherwise.

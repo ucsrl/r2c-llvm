@@ -59,6 +59,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/RandomNumberGenerator.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
@@ -67,6 +68,7 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <llvm/R2COptions/R2COptions.h>
 #include <utility>
 #include <vector>
 
@@ -117,6 +119,9 @@ private:
   // Flag to control whether the scavenger should be passed even though
   // FrameIndexVirtualScavenging is used.
   bool FrameIndexEliminationScavenging;
+
+  // RNG instance for this pass
+  std::unique_ptr<RandomNumberGenerator> RNG;
 
   // Emit remarks.
   MachineOptimizationRemarkEmitter *ORE = nullptr;
@@ -221,6 +226,12 @@ bool PEI::runOnMachineFunction(MachineFunction &MF) {
   RS = TRI->requiresRegisterScavenging(MF) ? new RegScavenger() : nullptr;
   FrameIndexVirtualScavenging = TRI->requiresFrameIndexScavenging(MF);
   ORE = &getAnalysis<MachineOptimizationRemarkEmitterPass>().getORE();
+
+  if (!RNG)
+    RNG.reset(MF.getFunction().getParent()->createRNG(this));
+
+//  if (MF.getName().contains("global_var_init.1.129"))
+//    raise(SIGTRAP);
 
   // Calculate the MaxCallFrameSize and AdjustsStack variables for the
   // function's frame information. Also eliminates call frame pseudo
@@ -1023,10 +1034,13 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
     AdjustStackOffset(MFI, EHRegNodeFrameIndex, StackGrowsDown, Offset,
                       MaxAlign, Skew);
 
-  // Give the targets a chance to order the objects the way they like it.
-  if (MF.getTarget().getOptLevel() != CodeGenOpt::None &&
-      MF.getTarget().Options.StackSymbolOrdering)
+  if (r2c::ShuffleStackObjects) {
+    RNG->shuffle(ObjectsToAllocate);
+  } else if (MF.getTarget().getOptLevel() != CodeGenOpt::None &&
+      MF.getTarget().Options.StackSymbolOrdering) {
+    // Give the targets a chance to order the objects the way they like it.
     TFI.orderFrameObjects(MF, ObjectsToAllocate);
+  }
 
   // Keep track of which bytes in the fixed and callee-save range are used so we
   // can use the holes when allocating later stack objects.  Only do this if
@@ -1187,7 +1201,9 @@ void PEI::replaceFrameIndices(MachineBasicBlock *BB, MachineFunction &MF,
   for (MachineBasicBlock::iterator I = BB->begin(); I != BB->end(); ) {
     if (TII.isFrameInstr(*I)) {
       InsideCallSequence = TII.isFrameSetup(*I);
+
       SPAdj += TII.getSPAdjust(*I);
+
       I = TFI->eliminateCallFramePseudoInstr(MF, *BB, I);
       continue;
     }

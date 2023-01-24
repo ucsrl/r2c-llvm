@@ -73,7 +73,10 @@ namespace llvm {
     ///
     CALL,
 
-    /// Same as call except it adds the NoTrack prefix.
+    BTRA_SETUP,
+      BTRA_TEARDOWN,
+      BTRA_SETUP_WITH_FP,
+      BTRA_TEARDOWN_WITH_FP,/// Same as call except it adds the NoTrack prefix.
     NT_CALL,
 
     /// X86 compare and logical compare instructions.
@@ -1522,6 +1525,9 @@ namespace llvm {
                          const SmallVectorImpl<ISD::InputArg> &Ins,
                          const SDLoc &dl, SelectionDAG &DAG,
                          SmallVectorImpl<SDValue> &InVals) const override;
+    SDValue
+    GetValueFromBoobyTrapAttribute(TargetLowering::CallLoweringInfo &CLI,
+                                   StringRef Attribute) const;
     SDValue LowerCall(CallLoweringInfo &CLI,
                       SmallVectorImpl<SDValue> &InVals) const override;
 

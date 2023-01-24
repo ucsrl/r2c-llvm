@@ -19,6 +19,7 @@
 namespace llvm {
 
 class FunctionPass;
+class ModulePass;
 class InstructionSelector;
 class PassRegistry;
 class X86RegisterBankInfo;
@@ -100,6 +101,18 @@ FunctionPass *createX86WinEHStatePass();
 /// the MachineInstr to MC.
 FunctionPass *createX86ExpandPseudoPass();
 
+/// Return a Machine IR pass that expands BTRA-specific pseudo
+/// instructions into a sequence of actual instructions. This pass
+/// must run before prologue/epilogue insertion and after the fast register
+/// allocation pass.
+FunctionPass *createX86ExpandBTRAPass();
+
+ModulePass *createX86InsertBTPass();
+ModulePass *createShuffleFunctionsPass();
+FunctionPass *createX86PrologPaddingPass();
+FunctionPass *createX86BTRAFusionPass();
+FunctionPass *createX86BTRAUnfusionPass();
+
 /// This pass converts X86 cmov instructions into branch when profitable.
 FunctionPass *createX86CmovConverterPass();
 
@@ -144,6 +157,7 @@ FunctionPass *createX86LoadValueInjectionLoadHardeningPass();
 FunctionPass *createX86LoadValueInjectionRetHardeningPass();
 FunctionPass *createX86SpeculativeLoadHardeningPass();
 FunctionPass *createX86SpeculativeExecutionSideEffectSuppression();
+
 
 void initializeEvexToVexInstPassPass(PassRegistry &);
 void initializeFixupBWInstPassPass(PassRegistry &);

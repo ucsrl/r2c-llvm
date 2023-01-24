@@ -719,6 +719,7 @@ private:
   GCMetadataPrinter *GetOrCreateGCPrinter(GCStrategy &S);
   /// Emit GlobalAlias or GlobalIFunc.
   void emitGlobalIndirectSymbol(Module &M, const GlobalIndirectSymbol &GIS);
+  void emitBoobyTrapArray(const GlobalVariable *GV);
 };
 
 } // end namespace llvm

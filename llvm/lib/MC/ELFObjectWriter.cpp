@@ -1131,6 +1131,13 @@ uint64_t ELFWriter::writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) {
     OWriter.TargetObjectWriter->addTargetSectionFlags(Ctx, Section);
   }
 
+  MCSectionELF *BTRAInfoSection = nullptr;
+  if (!Asm.R2CInfo.empty()) {
+    BTRAInfoSection = Ctx.getELFSection(".llvm.btra-info",
+                                         ELF::SHT_LLVM_R2C_INFO, ELF::SHF_MERGE, 8, "");
+    SectionIndexMap[BTRAInfoSection] = addToSectionTable(BTRAInfoSection);
+  }
+
   MCSectionELF *CGProfileSection = nullptr;
   if (!Asm.CGProfile.empty()) {
     CGProfileSection = Ctx.getELFSection(".llvm.call-graph-profile",
@@ -1192,6 +1199,16 @@ uint64_t ELFWriter::writeObject(MCAssembler &Asm, const MCAsmLayout &Layout) {
       uint64_t SecEnd = W.OS.tell();
       SectionOffsets[AddrsigSection] = std::make_pair(SecStart, SecEnd);
     }
+  }
+
+  if (BTRAInfoSection) {
+    uint64_t SecStart = W.OS.tell();
+    for (const MCAssembler::R2CInfoEntry &RIE : Asm.R2CInfo) {
+      W.write<uint32_t>(RIE.F->getSymbol().getIndex());
+      W.write<uint32_t>(RIE.Count);
+    }
+    uint64_t SecEnd = W.OS.tell();
+    SectionOffsets[BTRAInfoSection] = std::make_pair(SecStart, SecEnd);
   }
 
   if (CGProfileSection) {

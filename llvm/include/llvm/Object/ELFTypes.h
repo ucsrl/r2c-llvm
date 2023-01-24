@@ -43,6 +43,7 @@ template <class ELFT> struct Elf_Nhdr_Impl;
 template <class ELFT> class Elf_Note_Impl;
 template <class ELFT> class Elf_Note_Iterator_Impl;
 template <class ELFT> struct Elf_CGProfile_Impl;
+template <class ELFT> struct Elf_R2CInfo_Impl;
 
 template <endianness E, bool Is64> struct ELFType {
 private:
@@ -74,6 +75,7 @@ public:
   using Note = Elf_Note_Impl<ELFType<E, Is64>>;
   using NoteIterator = Elf_Note_Iterator_Impl<ELFType<E, Is64>>;
   using CGProfile = Elf_CGProfile_Impl<ELFType<E, Is64>>;
+  using R2CInfo = Elf_R2CInfo_Impl<ELFType<E, Is64>>;
   using DynRange = ArrayRef<Dyn>;
   using ShdrRange = ArrayRef<Shdr>;
   using SymRange = ArrayRef<Sym>;
@@ -704,6 +706,12 @@ template <class ELFT> struct Elf_CGProfile_Impl {
   Elf_Word cgp_from;
   Elf_Word cgp_to;
   Elf_Xword cgp_weight;
+};
+
+template <class ELFT> struct Elf_R2CInfo_Impl {
+  LLVM_ELF_IMPORT_TYPES_ELFT(ELFT)
+  Elf_Word radi_fun;
+  Elf_Word radi_count;
 };
 
 // MIPS .reginfo section

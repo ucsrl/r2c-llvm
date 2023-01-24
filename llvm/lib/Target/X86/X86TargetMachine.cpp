@@ -368,6 +368,10 @@ public:
   void addPreSched2() override;
 
   std::unique_ptr<CSEConfigBase> getCSEConfig() const override;
+  void addMachineLateOptimization() override{
+    addPass(createX86BTRAFusionPass());
+    TargetPassConfig::addMachineLateOptimization();
+  }
 };
 
 class X86ExecutionDomainFix : public ExecutionDomainFix {
@@ -477,7 +481,6 @@ void X86PassConfig::addPreRegAlloc() {
     addPass(createX86CallFrameOptimization());
     addPass(createX86AvoidStoreForwardingBlocks());
   }
-
   addPass(createX86SpeculativeLoadHardeningPass());
   addPass(createX86FlagsCopyLoweringPass());
   addPass(createX86WinAllocaExpander());
@@ -495,6 +498,7 @@ void X86PassConfig::addPostRegAlloc() {
   // analyses needed by the LVIHardening pass when compiling at -O0.
   if (getOptLevel() != CodeGenOpt::None)
     addPass(createX86LoadValueInjectionLoadHardeningPass());
+  addPass(createX86ExpandBTRAPass());
 }
 
 void X86PassConfig::addPreSched2() { addPass(createX86ExpandPseudoPass()); }
@@ -540,6 +544,15 @@ void X86PassConfig::addPreEmitPass2() {
   // issues in the unwinder.
   if (TT.isOSWindows() && TT.getArch() == Triple::x86_64)
     addPass(createX86AvoidTrailingCallPass());
+
+  addPass(createX86BTRAUnfusionPass());
+  addPass(createX86PrologPaddingPass());
+  addPass(createX86InsertBTPass());
+
+
+  // The X86InsertBT pass might insert additional functions so we need to shuffle
+  // afterwards
+  addPass(createShuffleFunctionsPass());
 
   // Verify basic block incoming and outgoing cfa offset and register values and
   // correct CFA calculation rule where needed by inserting appropriate CFI

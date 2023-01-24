@@ -31,6 +31,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include <csignal>
 
 using namespace llvm;
 
@@ -596,6 +597,10 @@ BitVector X86RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
     }
   }
 
+  Reserved.set(X86::ZMM13);
+  Reserved.set(X86::XMM13);
+  Reserved.set(X86::YMM13);
+
   assert(checkAllSuperRegsMarked(Reserved,
                                  {X86::SIL, X86::DIL, X86::BPL, X86::SPL,
                                   X86::SIH, X86::DIH, X86::BPH, X86::SPH}));
@@ -632,6 +637,8 @@ bool X86RegisterInfo::hasBasePointer(const MachineFunction &MF) const {
     return true;
 
   const MachineFrameInfo &MFI = MF.getFrameInfo();
+   const X86MachineFunctionInfo *FuncInfo = MF.getInfo<X86MachineFunctionInfo>();
+   const X86FrameLowering *TFL = getFrameLowering(MF);
 
   if (!EnableBasePointer)
     return false;
@@ -641,8 +648,17 @@ bool X86RegisterInfo::hasBasePointer(const MachineFunction &MF) const {
   // can't address variables from the stack pointer.  MS inline asm can
   // reference locals while also adjusting the stack pointer.  When we can't
   // use both the SP and the FP, we need a separate base pointer register.
-  bool CantUseFP = needsStackRealignment(MF);
-  return CantUseFP && CantUseSP(MFI);
+  bool CantUseFP = needsStackRealignment(MF)|| FuncInfo->getCallerPreparedFP();
+  bool SPUnusable = CantUseSP(MFI);
+
+   // In addition to the FP and the SP being insufficient to address locals, we
+   // might also need a base pointer if
+   // 1) We have a FP spill slot which means we can't use the FP to address it
+   // 2) We have SP adjustments after the prologue which means we can't use the
+   // SP to address it
+   return (CantUseFP && SPUnusable) ||
+          (!TFL->hasReservedCallFrame(MF) &&
+           FuncInfo->getCallerFPSpillSlotFI() && SPUnusable);
 }
 
 bool X86RegisterInfo::canRealignStack(const MachineFunction &MF) const {
@@ -723,6 +739,8 @@ X86RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                                : isFuncletReturnInstr(*MBBI);
   const X86FrameLowering *TFI = getFrameLowering(MF);
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
+  const X86InstrInfo *TII =
+      MI.getParent()->getParent()->getSubtarget<X86Subtarget>().getInstrInfo();
 
   // Determine base register and offset.
   int FIOffset;
@@ -736,6 +754,39 @@ X86RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     FIOffset = TFI->getWin64EHFrameIndexRef(MF, FrameIndex, BasePtr);
   } else {
     FIOffset = TFI->getFrameIndexReference(MF, FrameIndex, BasePtr);
+  }
+
+  if (MI.isCall() && BasePtr == FramePtr) {
+    MachineBasicBlock::iterator  SearchIter = II;
+    while (SearchIter != MBB.begin()) {
+      if (SearchIter->getOpcode() == X86::MOV64rr &&
+          !SearchIter->getFlag(MachineInstr::FrameSetup) &&
+          SearchIter->getOperand(0).isReg() &&
+          SearchIter->getOperand(0).getReg() == FramePtr) {
+
+        if (MF.getFrameInfo().isFixedObjectIndex(FrameIndex)) {
+          // The callee is saved in a fixed stack object. We cannot use the SP
+          // to access the stack object because of the unknown pre-decoy offset.
+          // We need to save a temporary copy of the frame pointer to access
+          // the callee.
+          // TODO: we should use the RegScavenger instead
+          BuildMI(*MI.getParent(), SearchIter, SearchIter->getDebugLoc(), TII->get(X86::MOV64rr), X86::RAX).addReg(FramePtr);
+          BasePtr = X86::RAX;
+          errs() << "Replaced invalid RBP based stack access with a temporary RAX access in "
+                 << MF.getName() << "\n";
+        } else {
+          assert(
+              !needsStackRealignment(MF) && !CantUseSP(MF.getFrameInfo()) &&
+              "Need to lookup a function pointer frame object at a BTRA protected call site, but can't use SP due to stack realignment");
+          FIOffset = TFI->getFrameIndexReferenceSP(
+              MF, FrameIndex, BasePtr, MF.getFrameInfo().getStackSize());
+          errs() << "Replaced invalid RBP based stack access with SP in "
+                 << MF.getName() << "\n";
+        }
+        break;
+      }
+      SearchIter--;
+    }
   }
 
   // LOCAL_ESCAPE uses a single offset, with no register. It only works in the

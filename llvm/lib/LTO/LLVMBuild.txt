@@ -28,6 +28,8 @@ required_libraries =
  Core
  Extensions
  IPO
+ R2C
+ R2COptions
  InstCombine
  Linker
  MC

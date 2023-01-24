@@ -61,12 +61,34 @@
 #include <algorithm>
 #include <bitset>
 #include <cctype>
+#include <llvm/R2COptions/R2COptions.h>
 #include <numeric>
+
+#include <signal.h>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "x86-isel"
 
 STATISTIC(NumTailCalls, "Number of tail calls");
+STATISTIC(NumCallSites, "Number of call sites");
+STATISTIC(NumDirectCallSites, "Number of direct call sites");
+STATISTIC(NumBTCallSites, "Number of call sites calling the Booby Trap");
+STATISTIC(NumIndirectCallSites, "Number of indirect call sites");
+STATISTIC(CallsWithStackArgs, "Number of calls which pass arguments on the stack");
+STATISTIC(NumStackArgFunctions, "Number of functions with stack arguments");
+STATISTIC(NumVarArgFunctions, "Number of variadic functions");
+STATISTIC(NumCallerFPCallSites, "Number of call sites with caller prepared frame pointer");
+STATISTIC(NumCallerFPFunctions, "Number of functions with caller prepared frame pointer");
+STATISTIC(StackArgRetractedBTRACallSites, "Number of call sites which had an unknown callee and stack arguments");
+
+STATISTIC(HotIndCallsWithStackArgs, "Number of hot indirect calls which pass arguments on the stack");
+STATISTIC(ColdIndCallsWithStackArgs, "Number of cold indirect calls which pass arguments on the stack");
+STATISTIC(HotDirCallsWithStackArgs, "Number of hot direct calls which pass arguments on the stack");
+STATISTIC(ColdDirCallsWithStackArgs, "Number of cold direct calls which pass arguments on the stack");
+STATISTIC(HotFunctionWithStackArgs, "Number of hot functions with arguments on the stack");
+STATISTIC(ColdFunctionsWithStackArgs, "Number of cold functions with arguments on the stack");
+
 
 static cl::opt<int> ExperimentalPrefLoopAlignment(
     "x86-experimental-pref-loop-alignment", cl::init(4),
@@ -3551,6 +3573,7 @@ SDValue X86TargetLowering::LowerFormalArguments(
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
   MachineFunction &MF = DAG.getMachineFunction();
   X86MachineFunctionInfo *FuncInfo = MF.getInfo<X86MachineFunctionInfo>();
+  const TargetFrameLowering &TFI = *Subtarget.getFrameLowering();
 
   const Function &F = MF.getFunction();
   if (F.hasExternalLinkage() && Subtarget.isTargetCygMing() &&
@@ -3673,6 +3696,20 @@ SDValue X86TargetLowering::LowerFormalArguments(
       }
     } else {
       assert(VA.isMemLoc());
+
+      NumStackArgFunctions++;
+      if (!r2c::Implementation.hasFlag(
+              r2c::ImplementationFlags::DisableDiversity) &&
+          F.hasFnAttribute("diversity-btra-candidate") &&
+          !(r2c::Implementation.hasFlag(
+              r2c::ImplementationFlags::NoCallerFPSetup))) {
+        FuncInfo->setCallerPreparedFP(true);
+        FuncInfo->setForceFramePointer(true);
+        NumCallerFPFunctions++;
+        DEBUG_WITH_TYPE("x86-rad", dbgs()
+                                       << "Function " << F.getName()
+                                       << "has caller prepared framepointer\n");
+      }
       ArgValue =
           LowerMemArgument(Chain, CallConv, Ins, dl, DAG, VA, MFI, InsIndex);
     }
@@ -3714,9 +3751,169 @@ SDValue X86TargetLowering::LowerFormalArguments(
                          MF.getTarget().Options.GuaranteedTailCallOpt))
     StackSize = GetAlignedArgumentStackSize(StackSize, DAG);
 
-  if (IsVarArg)
-    VarArgsLoweringHelper(FuncInfo, dl, DAG, Subtarget, CallConv, CCInfo)
-        .lowerVarArgsParameters(Chain, StackSize);
+  // If the function takes variable number of arguments, make a frame index for
+  // the start of the first vararg value... for expansion of llvm.va_start. We
+  // can skip this if there are no va_start calls.
+  if (MFI.hasVAStart() &&
+      (Is64Bit || (CallConv != CallingConv::X86_FastCall &&
+                   CallConv != CallingConv::X86_ThisCall))) {
+    FuncInfo->setVarArgsFrameIndex(MFI.CreateFixedObject(1, StackSize, true));
+  }
+
+  // Figure out if XMM registers are in use.
+  assert(!(Subtarget.useSoftFloat() &&
+           F.hasFnAttribute(Attribute::NoImplicitFloat)) &&
+         "SSE register cannot be used when SSE is disabled!");
+
+  // 64-bit calling conventions support varargs and register parameters, so we
+  // have to do extra work to spill them in the prologue.
+  if (Is64Bit && IsVarArg && MFI.hasVAStart()) {
+    // Find the first unallocated argument registers.
+    ArrayRef<MCPhysReg> ArgGPRs = get64BitArgumentGPRs(CallConv, Subtarget);
+    ArrayRef<MCPhysReg> ArgXMMs = get64BitArgumentXMMs(MF, CallConv, Subtarget);
+    unsigned NumIntRegs = CCInfo.getFirstUnallocated(ArgGPRs);
+    unsigned NumXMMRegs = CCInfo.getFirstUnallocated(ArgXMMs);
+    assert(!(NumXMMRegs && !Subtarget.hasSSE1()) &&
+           "SSE register cannot be used when SSE is disabled!");
+
+    // Gather all the live in physical registers.
+    SmallVector<SDValue, 6> LiveGPRs;
+    SmallVector<SDValue, 8> LiveXMMRegs;
+    SDValue ALVal;
+    for (MCPhysReg Reg : ArgGPRs.slice(NumIntRegs)) {
+      unsigned GPR = MF.addLiveIn(Reg, &X86::GR64RegClass);
+      LiveGPRs.push_back(
+          DAG.getCopyFromReg(Chain, dl, GPR, MVT::i64));
+    }
+    if (!ArgXMMs.empty()) {
+      unsigned AL = MF.addLiveIn(X86::AL, &X86::GR8RegClass);
+      ALVal = DAG.getCopyFromReg(Chain, dl, AL, MVT::i8);
+      for (MCPhysReg Reg : ArgXMMs.slice(NumXMMRegs)) {
+        unsigned XMMReg = MF.addLiveIn(Reg, &X86::VR128RegClass);
+        LiveXMMRegs.push_back(
+            DAG.getCopyFromReg(Chain, dl, XMMReg, MVT::v4f32));
+      }
+    }
+
+    if (IsWin64) {
+      // Get to the caller-allocated home save location.  Add 8 to account
+      // for the return address.
+      int HomeOffset = TFI.getOffsetOfLocalArea() + 8;
+      FuncInfo->setRegSaveFrameIndex(
+          MFI.CreateFixedObject(1, NumIntRegs * 8 + HomeOffset, false));
+      // Fixup to set vararg frame on shadow area (4 x i64).
+      if (NumIntRegs < 4)
+        FuncInfo->setVarArgsFrameIndex(FuncInfo->getRegSaveFrameIndex());
+    } else {
+      // For X86-64, if there are vararg parameters that are passed via
+      // registers, then we must store them to their spots on the stack so
+      // they may be loaded by dereferencing the result of va_next.
+      FuncInfo->setVarArgsGPOffset(NumIntRegs * 8);
+      FuncInfo->setVarArgsFPOffset(ArgGPRs.size() * 8 + NumXMMRegs * 16);
+      FuncInfo->setRegSaveFrameIndex(MFI.CreateStackObject(
+          ArgGPRs.size() * 8 + ArgXMMs.size() * 16, Align(16), false));
+    }
+
+    // Store the integer parameter registers.
+    SmallVector<SDValue, 8> MemOps;
+    SDValue RSFIN = DAG.getFrameIndex(FuncInfo->getRegSaveFrameIndex(),
+                                      getPointerTy(DAG.getDataLayout()));
+    unsigned Offset = FuncInfo->getVarArgsGPOffset();
+    for (SDValue Val : LiveGPRs) {
+      SDValue FIN = DAG.getNode(ISD::ADD, dl, getPointerTy(DAG.getDataLayout()),
+                                RSFIN, DAG.getIntPtrConstant(Offset, dl));
+      SDValue Store =
+          DAG.getStore(Val.getValue(1), dl, Val, FIN,
+                       MachinePointerInfo::getFixedStack(
+                           DAG.getMachineFunction(),
+                           FuncInfo->getRegSaveFrameIndex(), Offset));
+      MemOps.push_back(Store);
+      Offset += 8;
+    }
+
+    if (!ArgXMMs.empty() && NumXMMRegs != ArgXMMs.size()) {
+      // Now store the XMM (fp + vector) parameter registers.
+      SmallVector<SDValue, 12> SaveXMMOps;
+      SaveXMMOps.push_back(Chain);
+      SaveXMMOps.push_back(ALVal);
+      SaveXMMOps.push_back(DAG.getIntPtrConstant(
+                             FuncInfo->getRegSaveFrameIndex(), dl));
+      SaveXMMOps.push_back(DAG.getIntPtrConstant(
+                             FuncInfo->getVarArgsFPOffset(), dl));
+      SaveXMMOps.insert(SaveXMMOps.end(), LiveXMMRegs.begin(),
+                        LiveXMMRegs.end());
+      MemOps.push_back(DAG.getNode(X86ISD::VASTART_SAVE_XMM_REGS, dl,
+                                   MVT::Other, SaveXMMOps));
+    }
+
+    NumVarArgFunctions++;
+    if (!r2c::Implementation.hasFlag(
+            r2c::ImplementationFlags::DisableDiversity) &&
+        F.hasFnAttribute("diversity-btra-candidate") &&
+        !r2c::Implementation.hasFlag(
+            r2c::ImplementationFlags::NoCallerFPSetup)) {
+      FuncInfo->setCallerPreparedFP(true);
+      FuncInfo->setForceFramePointer(true);
+      NumCallerFPFunctions++;
+      DEBUG_WITH_TYPE(
+          "x86-rad",
+          dbgs() << "Function " << F.getName()
+                 << "has caller prepared framepointer because of varargs\n");
+    }
+
+    if (!MemOps.empty())
+      Chain = DAG.getNode(ISD::TokenFactor, dl, MVT::Other, MemOps);
+  }
+
+  if (r2c::EnableStatistics && FuncInfo->getCallerPreparedFP()) {
+    if (F.hasFnAttribute("r2c-hot-function")) {
+      HotFunctionWithStackArgs++;
+    }
+
+    if (F.hasFnAttribute("r2c-cold-function")) {
+      ColdFunctionsWithStackArgs++;
+    }
+  }
+
+  if (IsVarArg && MFI.hasMustTailInVarArgFunc()) {
+    // Find the largest legal vector type.
+    MVT VecVT = MVT::Other;
+    // FIXME: Only some x86_32 calling conventions support AVX512.
+    if (Subtarget.hasAVX512() &&
+        (Is64Bit || (CallConv == CallingConv::X86_VectorCall ||
+                     CallConv == CallingConv::Intel_OCL_BI)))
+      VecVT = MVT::v16f32;
+    else if (Subtarget.hasAVX())
+      VecVT = MVT::v8f32;
+    else if (Subtarget.hasSSE2())
+      VecVT = MVT::v4f32;
+
+    // We forward some GPRs and some vector types.
+    SmallVector<MVT, 2> RegParmTypes;
+    MVT IntVT = Is64Bit ? MVT::i64 : MVT::i32;
+    RegParmTypes.push_back(IntVT);
+    if (VecVT != MVT::Other)
+      RegParmTypes.push_back(VecVT);
+
+    // Compute the set of forwarded registers. The rest are scratch.
+    SmallVectorImpl<ForwardedRegister> &Forwards =
+        FuncInfo->getForwardedMustTailRegParms();
+    CCInfo.analyzeMustTailForwardedRegisters(Forwards, RegParmTypes, CC_X86);
+
+    // Conservatively forward AL on x86_64, since it might be used for varargs.
+    if (Is64Bit && !CCInfo.isAllocated(X86::AL)) {
+      unsigned ALVReg = MF.addLiveIn(X86::AL, &X86::GR8RegClass);
+      Forwards.push_back(ForwardedRegister(ALVReg, X86::AL, MVT::i8));
+    }
+
+    // Copy all forwards from physical to virtual registers.
+    for (ForwardedRegister &F : Forwards) {
+      // FIXME: Can we use a less constrained schedule?
+      SDValue RegVal = DAG.getCopyFromReg(Chain, dl, F.VReg, F.VT);
+      F.VReg = MF.getRegInfo().createVirtualRegister(getRegClassFor(F.VT));
+      Chain = DAG.getCopyToReg(Chain, dl, F.VReg, RegVal);
+    }
+  }
 
   // Some CCs need callee pop.
   if (X86::isCalleePop(CallConv, Is64Bit, IsVarArg,
@@ -3863,6 +4060,8 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       (CI && CI->doesNoCfCheck()) || (II && II->doesNoCfCheck());
   const Module *M = MF.getMMI().getModule();
   Metadata *IsCFProtectionSupported = M->getModuleFlag("cf-protection-branch");
+  const X86FrameLowering *TFL = Subtarget.getFrameLowering();
+  X86MachineFunctionInfo *X86FI = MF.getInfo<X86MachineFunctionInfo>();
 
   MachineFunction::CallSiteInfo CSInfo;
   if (CallConv == CallingConv::X86_INTR)
@@ -3897,10 +4096,20 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     // ABI changes.
     if (!IsGuaranteeTCO && isTailCall)
       IsSibcall = true;
-
-    if (isTailCall)
-      ++NumTailCalls;
   }
+
+  ++NumCallSites;
+  if (Fn == nullptr) {
+    ++NumIndirectCallSites;
+  } else {
+    ++NumDirectCallSites;
+    if (Fn->getName() == "BoobyTrap") {
+      NumBTCallSites++;
+    }
+  }
+
+  if (isTailCall)
+    ++NumTailCalls;
 
   assert(!(isVarArg && canGuaranteeTCO(CallConv)) &&
          "Var args not supported with calling convention fastcc, ghc or hipe");
@@ -3913,6 +4122,49 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (IsWin64)
     CCInfo.AllocateStack(32, Align(8));
 
+  size_t BTRABefore = 0;
+  size_t BTRAAfter = 0;
+  bool UseBTRA = false;
+  if (!(r2c::Implementation.hasFlag(r2c::ImplementationFlags::DisableDiversity))) {
+    if (!isTailCall) {
+
+      Fn = CLI.CB ? CLI.CB->getCalledFunction() : Fn;
+      if (CLI.CB && CLI.CB->hasFnAttr("diversity-btra-call")) {
+        CLI.CB->getAttributes()
+            .getFnAttributes()
+            .getAttribute("diversity-btra-before")
+            .getValueAsString()
+            .getAsInteger(10, BTRABefore);
+        CLI.CB->getAttributes()
+            .getFnAttributes()
+            .getAttribute("diversity-btra-after")
+            .getValueAsString()
+            .getAsInteger(10, BTRAAfter);
+      }
+
+      UseBTRA = true;
+      DEBUG_WITH_TYPE("x86-rad",
+                      dbgs() << "Calling function " << (Fn ? Fn->getName() : "<unknown>")
+                             << " from " << MF.getName() << " with BTRABefore: "
+                             << BTRABefore << "\n");
+    } else {
+      DEBUG_WITH_TYPE("x86-rad", dbgs() << "Disabling BTRA because of tail call\n");
+    }
+  }
+
+
+
+//  // calculate the number of decoys to insert
+//  unsigned int NumArgs = ArgLocs.size();
+//  DEBUG_WITH_TYPE("x86-rad", dbgs() << "Reserving parameter stack space for " << BTRABefore << " in function " << MF.getName() << "\n");
+//  for (unsigned int i = NumArgs; i < NumArgs + BTRABefore; i++) {
+//    unsigned Offset = CCInfo.AllocateStack(8, 8);
+//    MVT VT = getPointerTy(DAG.getDataLayout());
+//    CCInfo.addLoc(CCValAssign::getCustomMem(i, VT, Offset, VT, CCValAssign::Full));
+//  }
+//
+//  CCInfo.AllocateStack(0, 16);
+//
   CCInfo.AnalyzeArguments(Outs, CC_X86);
 
   // In vectorcall calling convention a second pass is required for the HVA
@@ -3920,6 +4172,7 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (CallingConv::X86_VectorCall == CallConv) {
     CCInfo.AnalyzeArgumentsSecondPass(Outs, CC_X86);
   }
+
 
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NumBytes = CCInfo.getAlignedCallFrameSize();
@@ -3992,6 +4245,10 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // input arguments.
   assert(isSortedByValueNo(ArgLocs) &&
          "Argument Location list must be sorted before lowering");
+
+  bool CallerPreparedFP = false;
+  bool HasMemArgs = false;
+
 
   // Walk the register/memloc assignments, inserting copies/loads.  In the case
   // of tail call optimization arguments are handle later.
@@ -4087,11 +4344,56 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       }
     } else if (!IsSibcall && (!isTailCall || isByVal)) {
       assert(VA.isMemLoc());
+
+      // If we cannot guarantee that the callee is compiled by us,
+      // conservatively assume that it is not. In such a case we cannot use
+      // before decoys. The before decoys would mess up parameter addressing.
+      if (!CLI.CB || !CLI.CB->hasFnAttr("diversity-btra-callee")) {
+        StackArgRetractedBTRACallSites++;
+        BTRABefore = 0;
+      }
+
+      HasMemArgs = true;
+      CallsWithStackArgs++;
+
       if (!StackPtr.getNode())
         StackPtr = DAG.getCopyFromReg(Chain, dl, RegInfo->getStackRegister(),
                                       getPointerTy(DAG.getDataLayout()));
       MemOpChains.push_back(LowerMemOpCallTo(Chain, StackPtr, Arg,
                                              dl, DAG, VA, Flags, isByVal));
+    }
+  }
+
+  if (UseBTRA && (HasMemArgs || isVarArg) && !(r2c::Implementation.hasFlag(
+          r2c::ImplementationFlags::NoCallerFPSetup))) {
+    AttributeList Attributes = CLI.CB->getAttributes();
+    if (Attributes.hasFnAttribute("diversity-btra-callee") ||
+        Attributes.hasFnAttribute("diversity-maybe-btra-callee")) {
+      CallerPreparedFP = true;
+      NumCallerFPCallSites++;
+
+      if (!X86FI->getCallerFPSpillSlotFI().hasValue()) {
+        X86FI->setCallerFPSpillSlotFI(MF.getFrameInfo().CreateStackObject(
+            TFL->SlotSize, TFL->getStackAlign(), true));
+      }
+    }
+  }
+
+  if (r2c::EnableStatistics && HasMemArgs) {
+    if (CLI.CB->getAttributes().hasFnAttribute("r2c-hot-call")) {
+      if (CLI.CB->getCalledFunction() == nullptr) {
+        HotIndCallsWithStackArgs++;
+      } else {
+        HotDirCallsWithStackArgs++;
+      }
+    }
+
+    if (CLI.CB->getAttributes().hasFnAttribute("r2c-cold-call")) {
+      if (CLI.CB->getCalledFunction() == nullptr) {
+        ColdIndCallsWithStackArgs++;
+      } else {
+        ColdDirCallsWithStackArgs++;
+      }
     }
   }
 
@@ -4254,6 +4556,58 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Callee = DAG.getNode(ISD::ZERO_EXTEND, dl, MVT::i64, Callee);
   }
 
+  if (UseBTRA) {
+
+    assert(BTRABefore >= 0 && "Negative BTRABefore in ISelLowering");
+    assert(BTRAAfter >= 0 && "Negative BTRAAfter in ISelLowering");
+    SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
+    unsigned SetupOpcode =
+        CallerPreparedFP ? X86ISD::BTRA_SETUP_WITH_FP : X86ISD::BTRA_SETUP;
+    SmallVector<SDValue, 10> RadSetupOps;
+    RadSetupOps.push_back(Chain);
+    RadSetupOps.push_back(DAG.getConstant(BTRABefore, dl, MVT::i32));
+    RadSetupOps.push_back(DAG.getConstant(BTRAAfter, dl, MVT::i32));
+
+    int BTSetupValue;
+    bool BTSetup = false;
+    if (CLI.CB) {
+      CLI.CB->getAttributes()
+          .getFnAttributes()
+          .getAttribute("diversity-btra-bt-setup")
+          .getValueAsString()
+          .getAsInteger(10, BTSetupValue);
+      BTSetup = static_cast<bool>(BTSetupValue);
+    }
+
+//    if (BTSetup) {
+//      for (unsigned I = 0; I < BTRABefore; ++I) {
+//        SDValue DecoyValue;
+//        // use the booby trap function address
+//        DecoyValue = GetValueFromBoobyTrapAttribute(
+//            CLI, "diversity-btra-before-fn" + Twine(I).str());
+//        RadSetupOps.push_back(DecoyValue);
+//      }
+//
+//      for (unsigned I = 0; I < BTRAAfter; ++I) {
+//        SDValue DecoyValue;
+//        // use the booby trap function address
+//        DecoyValue = GetValueFromBoobyTrapAttribute(
+//            CLI, "diversity-btra-after-fn" + Twine(I).str());
+//        RadSetupOps.push_back(DecoyValue);
+//      }
+//    }
+
+    if (InFlag.getNode()) {
+      RadSetupOps.push_back(InFlag);
+    }
+
+    if (UseBTRA) {
+
+      Chain = DAG.getNode(SetupOpcode, dl, VTs, RadSetupOps);
+      InFlag = Chain.getValue(1);
+    }
+  }
+
   // Returns a chain & a flag for retval copy to use.
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
   SmallVector<SDValue, 8> Ops;
@@ -4276,6 +4630,11 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   for (unsigned i = 0, e = RegsToPass.size(); i != e; ++i)
     Ops.push_back(DAG.getRegister(RegsToPass[i].first,
                                   RegsToPass[i].second.getValueType()));
+
+  if (UseBTRA && CallerPreparedFP) {
+    Ops.push_back(DAG.getRegister(RegInfo->getFramePtr(),
+                                  getPointerTy(DAG.getDataLayout())));
+  }
 
   // Add a register mask operand representing the call-preserved registers.
   // If HasNCSR is asserted (attribute NoCallerSavedRegisters exists) then we
@@ -4356,6 +4715,19 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (CLI.CB)
     if (MDNode *HeapAlloc = CLI.CB->getMetadata("heapallocsite"))
       DAG.addHeapAllocSite(Chain.getNode(), HeapAlloc);
+
+  if (UseBTRA) {
+
+    unsigned TeardownOpcode =
+        CallerPreparedFP ? X86ISD::BTRA_TEARDOWN_WITH_FP : X86ISD::BTRA_TEARDOWN;
+    SDVTList VTs = DAG.getVTList(MVT::Other, MVT::Glue);
+    SmallVector<SDValue, 5> RadTeardownOps;
+    RadTeardownOps.push_back(Chain);
+    RadTeardownOps.push_back(DAG.getConstant(BTRABefore, dl, MVT::i32));
+    RadTeardownOps.push_back(InFlag);
+    Chain = DAG.getNode(TeardownOpcode, dl, VTs, RadTeardownOps);
+    InFlag = Chain.getValue(1);
+  }
 
   // Create the CALLSEQ_END node.
   unsigned NumBytesForCalleeToPop;
@@ -5098,7 +5470,7 @@ bool X86TargetLowering::shouldReduceLoadWidth(SDNode *Load,
                                               ISD::LoadExtType ExtTy,
                                               EVT NewVT) const {
   assert(cast<LoadSDNode>(Load)->isSimple() && "illegal to narrow");
-  
+
   // "ELF Handling for Thread-Local Storage" specifies that R_X86_64_GOTTPOFF
   // relocation target a movq or addq instruction: don't let the load shrink.
   SDValue BasePtr = cast<LoadSDNode>(Load)->getBasePtr();
@@ -30656,6 +31028,10 @@ const char *X86TargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(ENQCMD)
   NODE_NAME_CASE(ENQCMDS)
   NODE_NAME_CASE(VP2INTERSECT)
+  NODE_NAME_CASE(BTRA_SETUP)
+  NODE_NAME_CASE(BTRA_TEARDOWN)
+  NODE_NAME_CASE(BTRA_SETUP_WITH_FP)
+  NODE_NAME_CASE(BTRA_TEARDOWN_WITH_FP)
   }
   return nullptr;
 #undef NODE_NAME_CASE

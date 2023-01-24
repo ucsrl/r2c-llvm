@@ -73,6 +73,8 @@ public:
   void emitCGProfileEntry(const MCSymbolRefExpr *From,
                           const MCSymbolRefExpr *To, uint64_t Count) override;
 
+  void emitR2CInfoEntry(const MCSymbolRefExpr *From, uint32_t Count) override;
+
   void finishImpl() override;
 
   void emitBundleAlignMode(unsigned AlignPow2) override;
@@ -87,6 +89,7 @@ private:
   void fixSymbolsInTLSFixups(const MCExpr *expr);
   void finalizeCGProfileEntry(const MCSymbolRefExpr *&S);
   void finalizeCGProfile();
+  void finalizeR2CInfo();
 
   /// Merge the content of the fragment \p EF into the fragment \p DF.
   void mergeFragment(MCDataFragment *, MCDataFragment *);

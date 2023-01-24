@@ -82,14 +82,21 @@ bool CCState::IsShadowAllocatedReg(MCRegister Reg) const {
 /// incorporating info about the formals into this state.
 void
 CCState::AnalyzeFormalArguments(const SmallVectorImpl<ISD::InputArg> &Ins,
-                                CCAssignFn Fn) {
+                                CCAssignFn Fn, unsigned Start) {
   unsigned NumArgs = Ins.size();
 
+  unsigned CurrentValNo = Start;
   for (unsigned i = 0; i != NumArgs; ++i) {
     MVT ArgVT = Ins[i].VT;
     ISD::ArgFlagsTy ArgFlags = Ins[i].Flags;
-    if (Fn(i, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, *this))
-      report_fatal_error("unable to allocate function argument #" + Twine(i));
+    if (Fn(CurrentValNo, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, *this)) {
+#ifndef NDEBUG
+      dbgs() << "Formal argument #" << i << " has unhandled type "
+             << EVT(ArgVT).getEVTString() << '\n';
+#endif
+      llvm_unreachable(nullptr);
+    }
+    CurrentValNo++;
   }
 }
 
@@ -123,19 +130,22 @@ void CCState::AnalyzeReturn(const SmallVectorImpl<ISD::OutputArg> &Outs,
 /// Analyze the outgoing arguments to a call,
 /// incorporating info about the passed values into this state.
 void CCState::AnalyzeCallOperands(const SmallVectorImpl<ISD::OutputArg> &Outs,
-                                  CCAssignFn Fn) {
+                                  CCAssignFn Fn, unsigned Start) {
   unsigned NumOps = Outs.size();
+  unsigned CurrentValNo = Start;
   for (unsigned i = 0; i != NumOps; ++i) {
     MVT ArgVT = Outs[i].VT;
     ISD::ArgFlagsTy ArgFlags = Outs[i].Flags;
-    if (Fn(i, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, *this)) {
+    if (Fn(CurrentValNo, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, *this)) {
 #ifndef NDEBUG
       dbgs() << "Call operand #" << i << " has unhandled type "
              << EVT(ArgVT).getEVTString() << '\n';
 #endif
       llvm_unreachable(nullptr);
     }
+    CurrentValNo++;
   }
+
 }
 
 /// Same as above except it takes vectors of types and argument flags.

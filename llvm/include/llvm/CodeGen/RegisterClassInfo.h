@@ -21,6 +21,8 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/Support/RandomNumberGenerator.h"
+#include "llvm/R2COptions/R2COptions.h"
 #include <cassert>
 #include <cstdint>
 #include <memory>
@@ -31,6 +33,7 @@ class RegisterClassInfo {
   struct RCInfo {
     unsigned Tag = 0;
     unsigned NumRegs = 0;
+    unsigned CSRStart = 0;
     bool ProperSubClass = false;
     uint8_t MinCost = 0;
     uint16_t LastCostChange = 0;
@@ -52,6 +55,7 @@ class RegisterClassInfo {
 
   const MachineFunction *MF = nullptr;
   const TargetRegisterInfo *TRI = nullptr;
+  std::unique_ptr<RandomNumberGenerator> RNG;
 
   // Callee saved registers of last MF. Assumed to be valid until the next
   // runOnFunction() call.
@@ -74,6 +78,8 @@ class RegisterClassInfo {
     const RCInfo &RCI = RegClass[RC->getID()];
     if (Tag != RCI.Tag)
       compute(RC);
+    if (r2c::RandomizeRegAlloc)
+      randomize(RC);
     return RCI;
   }
 
@@ -142,6 +148,7 @@ public:
 
 protected:
   unsigned computePSetLimit(unsigned Idx) const;
+  void randomize(const TargetRegisterClass *RC) const;
 };
 
 } // end namespace llvm

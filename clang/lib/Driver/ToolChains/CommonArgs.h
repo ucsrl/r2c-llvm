@@ -133,6 +133,11 @@ void addMultilibFlag(bool Enabled, const char *const Flag,
 
 void addX86AlignBranchArgs(const Driver &D, const llvm::opt::ArgList &Args,
                            llvm::opt::ArgStringList &CmdArgs, bool IsLTO);
+void addBoobyTrapRT(const ToolChain &TC, const llvm::opt::ArgList &Args,
+                        llvm::opt::ArgStringList &CmdArgs);
+
+void addHeapBoobyTrapRT(const ToolChain &TC, const llvm::opt::ArgList &Args,
+                        llvm::opt::ArgStringList &CmdArgs);
 } // end namespace tools
 } // end namespace driver
 } // end namespace clang

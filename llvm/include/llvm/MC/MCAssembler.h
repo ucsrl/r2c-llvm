@@ -431,6 +431,13 @@ public:
     uint64_t Count;
   };
   std::vector<CGProfileEntry> CGProfile;
+
+  struct R2CInfoEntry {
+    const MCSymbolRefExpr *F;
+    uint32_t Count;
+  };
+  std::vector<R2CInfoEntry> R2CInfo;
+
   /// @}
   /// \name Backend Data Access
   /// @{

@@ -249,6 +249,17 @@ public:
   CCState(CallingConv::ID CC, bool isVarArg, MachineFunction &MF,
           SmallVectorImpl<CCValAssign> &locs, LLVMContext &C);
 
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  LLVM_DUMP_METHOD void dump() const {
+    dbgs() << "CCState for " << MF.getName() << ":\n";
+    dbgs() << "Current StackOffset: " << StackOffset << "\n";
+    dbgs() << "Current MaxStackAlign: " << MaxStackArgAlign.value() << "\n";
+    dbgs() << "Number of Locations: " << Locs.size() << "\n";
+    dbgs() << "Aligned call frame size: " << getAlignedCallFrameSize() << "\n";
+    dbgs() << "FrameInfo MaxAlignment: " << MF.getFrameInfo().getMaxAlign().value() << "\n";
+  }
+#endif
+
   void addLoc(const CCValAssign &V) {
     Locs.push_back(V);
   }
@@ -280,12 +291,12 @@ public:
   /// AnalyzeFormalArguments - Analyze an array of argument values,
   /// incorporating info about the formals into this state.
   void AnalyzeFormalArguments(const SmallVectorImpl<ISD::InputArg> &Ins,
-                              CCAssignFn Fn);
+                              CCAssignFn Fn, unsigned Start);
 
   /// The function will invoke AnalyzeFormalArguments.
   void AnalyzeArguments(const SmallVectorImpl<ISD::InputArg> &Ins,
-                        CCAssignFn Fn) {
-    AnalyzeFormalArguments(Ins, Fn);
+                        CCAssignFn Fn, unsigned Start = 0) {
+    AnalyzeFormalArguments(Ins, Fn, Start);
   }
 
   /// AnalyzeReturn - Analyze the returned values of a return,
@@ -302,7 +313,7 @@ public:
   /// AnalyzeCallOperands - Analyze the outgoing arguments to a call,
   /// incorporating info about the passed values into this state.
   void AnalyzeCallOperands(const SmallVectorImpl<ISD::OutputArg> &Outs,
-                           CCAssignFn Fn);
+                           CCAssignFn Fn, unsigned Start = 0);
 
   /// AnalyzeCallOperands - Same as above except it takes vectors of types
   /// and argument flags.
@@ -312,8 +323,8 @@ public:
 
   /// The function will invoke AnalyzeCallOperands.
   void AnalyzeArguments(const SmallVectorImpl<ISD::OutputArg> &Outs,
-                        CCAssignFn Fn) {
-    AnalyzeCallOperands(Outs, Fn);
+                        CCAssignFn Fn, unsigned Start = 0) {
+    AnalyzeCallOperands(Outs, Fn, Start);
   }
 
   /// AnalyzeCallResult - Analyze the return values of a call,

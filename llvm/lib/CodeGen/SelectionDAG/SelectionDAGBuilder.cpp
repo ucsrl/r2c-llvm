@@ -5712,7 +5712,8 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     SDValue MC = DAG.getMemcpy(Root, sdl, Op1, Op2, Op3, Alignment, isVol,
                                /* AlwaysInline */ false, isTC,
                                MachinePointerInfo(I.getArgOperand(0)),
-                               MachinePointerInfo(I.getArgOperand(1)));
+                               MachinePointerInfo(I.getArgOperand(1)),
+                               &I);
     updateDAGForMaybeTailCall(MC);
     return;
   }
@@ -5733,7 +5734,8 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     SDValue MC = DAG.getMemcpy(getRoot(), sdl, Dst, Src, Size, Alignment, isVol,
                                /* AlwaysInline */ true, isTC,
                                MachinePointerInfo(I.getArgOperand(0)),
-                               MachinePointerInfo(I.getArgOperand(1)));
+                               MachinePointerInfo(I.getArgOperand(1)),
+                               &I);
     updateDAGForMaybeTailCall(MC);
     return;
   }
@@ -5748,7 +5750,7 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     bool isTC = I.isTailCall() && isInTailCallPosition(I, DAG.getTarget());
     SDValue Root = isVol ? getRoot() : getMemoryRoot();
     SDValue MS = DAG.getMemset(Root, sdl, Op1, Op2, Op3, Alignment, isVol, isTC,
-                               MachinePointerInfo(I.getArgOperand(0)));
+                               MachinePointerInfo(I.getArgOperand(0)), &I);
     updateDAGForMaybeTailCall(MS);
     return;
   }
@@ -5768,7 +5770,7 @@ void SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I,
     SDValue Root = isVol ? getRoot() : getMemoryRoot();
     SDValue MM = DAG.getMemmove(Root, sdl, Op1, Op2, Op3, Alignment, isVol,
                                 isTC, MachinePointerInfo(I.getArgOperand(0)),
-                                MachinePointerInfo(I.getArgOperand(1)));
+                                MachinePointerInfo(I.getArgOperand(1)), &I);
     updateDAGForMaybeTailCall(MM);
     return;
   }
@@ -7422,7 +7424,8 @@ bool SelectionDAGBuilder::visitMemPCpyCall(const CallInst &I) {
   SDValue MC = DAG.getMemcpy(Root, sdl, Dst, Src, Size, Alignment, isVol, false,
                              /*isTailCall=*/false,
                              MachinePointerInfo(I.getArgOperand(0)),
-                             MachinePointerInfo(I.getArgOperand(1)));
+                             MachinePointerInfo(I.getArgOperand(1)),
+                             &I);
   assert(MC.getNode() != nullptr &&
          "** memcpy should not be lowered as TailCall in mempcpy context **");
   DAG.setRoot(MC);

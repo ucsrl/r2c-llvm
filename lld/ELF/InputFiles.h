@@ -186,6 +186,7 @@ template <class ELFT> class ObjFile : public ELFFileBase {
   using Elf_Shdr = typename ELFT::Shdr;
   using Elf_Word = typename ELFT::Word;
   using Elf_CGProfile = typename ELFT::CGProfile;
+  using Elf_R2CInfo = typename ELFT::R2CInfo;
 
 public:
   static bool classof(const InputFile *f) { return f->kind() == ObjKind; }

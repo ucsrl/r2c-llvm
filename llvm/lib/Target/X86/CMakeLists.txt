@@ -32,6 +32,7 @@ set(sources
   X86DomainReassignment.cpp
   X86DiscriminateMemOps.cpp
   X86ExpandPseudo.cpp
+  X86ExpandBTRA.cpp
   X86FastISel.cpp
   X86FixupBWInsts.cpp
   X86FixupLEAs.cpp
@@ -74,6 +75,9 @@ set(sources
   X86WinAllocaExpander.cpp
   X86WinEHState.cpp
   X86InsertWait.cpp
+  ShuffleFunctions.cpp
+  X86InsertBT.cpp
+  X86PrologPadding.cpp
   )
 
 add_llvm_target(X86CodeGen ${sources})

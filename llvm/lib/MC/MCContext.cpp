@@ -254,6 +254,14 @@ unsigned MCContext::GetInstance(unsigned LocalLabelVal) {
   return Label->getInstance();
 }
 
+void MCContext::addBoobyTrapReturnLoc(const StringRef ArrayName, MCSymbol *Symbol) {
+  BTArrayReturnLocs[ArrayName] = Symbol;
+}
+
+MCSymbol *MCContext::getBoobyTrapReturnLoc(const StringRef ArrayName) {
+  return BTArrayReturnLocs[ArrayName];
+}
+
 MCSymbol *MCContext::getOrCreateDirectionalLocalSymbol(unsigned LocalLabelVal,
                                                        unsigned Instance) {
   MCSymbol *&Sym = LocalSymbols[std::make_pair(LocalLabelVal, Instance)];

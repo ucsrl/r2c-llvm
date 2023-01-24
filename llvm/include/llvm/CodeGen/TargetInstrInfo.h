@@ -29,6 +29,7 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/Support/BranchProbability.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/RandomNumberGenerator.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -59,7 +60,7 @@ class TargetRegisterClass;
 class TargetRegisterInfo;
 class TargetSchedModel;
 class TargetSubtargetInfo;
-
+class RandomNumberGenerator;
 template <class T> class SmallVectorImpl;
 
 using ParamLoadedValue = std::pair<MachineOperand, DIExpression*>;
@@ -1298,6 +1299,15 @@ public:
   virtual bool
   reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const {
     return true;
+  }
+
+  /// insertNoop - Insert a type of noop into the instruction stream at the
+  /// specified point to introduce fine-grained diversity. A target may randomly
+  /// choose from a pool of valid noops using the provided RNG.
+  virtual void insertNoop(MachineBasicBlock &MBB,
+                          MachineBasicBlock::iterator MI,
+                          RandomNumberGenerator&) const {
+    insertNoop(MBB, MI);
   }
 
   /// Insert a noop into the instruction stream at the specified point.

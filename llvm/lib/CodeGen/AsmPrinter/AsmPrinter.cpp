@@ -642,7 +642,11 @@ void AsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
   if (LocalAlias != EmittedInitSym)
     OutStreamer->emitLabel(LocalAlias);
 
-  emitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer());
+  if (OutContext.getBoobyTrapReturnLoc(GV->getName())) {
+    emitBoobyTrapArray(GV);
+  } else {
+    emitGlobalConstant(GV->getParent()->getDataLayout(), GV->getInitializer());
+  }
 
   if (MAI->hasDotTypeDotSizeDirective())
     // .size foo, 42
@@ -2843,6 +2847,31 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
 
   AP.OutStreamer->emitValue(ME, Size);
 }
+
+void AsmPrinter::emitBoobyTrapArray(const GlobalVariable *GV) {
+  const Constant *Initializer = GV->getInitializer();
+  const ConstantArray *CVA = dyn_cast<ConstantArray>(Initializer);
+  assert(CVA && "BoobyTrap array must have a constant array initializer");
+  MCSymbol *Symbol = OutContext.getBoobyTrapReturnLoc(GV->getName());
+  assert(Symbol && "No return location for booby trap array found");
+
+  const Constant *BaseCV;
+  if (Initializer->hasOneUse())
+    BaseCV = dyn_cast<Constant>(Initializer->user_back());
+  
+  uint64_t Offset = 0;
+  const DataLayout DL = GV->getParent()->getDataLayout();
+  for (unsigned I = 0, E = CVA->getNumOperands(); I != E; ++I) {
+      Constant *Element = CVA->getOperand(I);
+    if (Element->isNullValue()) {
+      uint64_t Size = DL.getTypeAllocSize(Element->getType());
+      OutStreamer->emitValue(MCSymbolRefExpr::create(Symbol, OutContext), Size);
+    } else {
+      emitGlobalConstantImpl(DL, Element, *this, BaseCV, Offset);
+      Offset += DL.getTypeAllocSize(CVA->getOperand(I)->getType());
+    }
+  }
+} 
 
 /// EmitGlobalConstant - Print a general LLVM constant to the .s file.
 void AsmPrinter::emitGlobalConstant(const DataLayout &DL, const Constant *CV) {

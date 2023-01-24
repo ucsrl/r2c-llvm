@@ -74,6 +74,7 @@ CGOPT(bool, UseCtors)
 CGOPT(bool, RelaxELFRelocations)
 CGOPT_EXP(bool, DataSections)
 CGOPT_EXP(bool, FunctionSections)
+CGOPT_EXP(bool, NoopInsertion)
 CGOPT(std::string, BBSections)
 CGOPT(unsigned, TLSSize)
 CGOPT(bool, EmulatedTLS)
@@ -326,6 +327,14 @@ codegen::RegisterCodeGenFlags::RegisterCodeGenFlags() {
       cl::init(false));
   CGBINDOPT(DataSections);
 
+
+  static cl::opt<bool>
+      NoopInsertion("noop-insertion",
+                    cl::desc("Randomly add Noop instructions to create fine-grained "
+                             "code layout diversity."),
+                    cl::init(false));
+  CGBINDOPT(NoopInsertion);
+
   static cl::opt<bool> FunctionSections(
       "function-sections", cl::desc("Emit functions into separate sections"),
       cl::init(false));
@@ -464,6 +473,7 @@ TargetOptions codegen::InitTargetOptionsFromCodeGenFlags() {
   Options.RelaxELFRelocations = getRelaxELFRelocations();
   Options.DataSections = getDataSections();
   Options.FunctionSections = getFunctionSections();
+  Options.NoopInsertion = getNoopInsertion();
   Options.BBSections = getBBSectionsMode(Options);
   Options.UniqueSectionNames = getUniqueSectionNames();
   Options.UniqueBasicBlockSectionNames = getUniqueBasicBlockSectionNames();

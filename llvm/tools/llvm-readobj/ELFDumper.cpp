@@ -113,6 +113,7 @@ using namespace ELF;
   using Elf_Verdef = typename ELFT::Verdef;                                    \
   using Elf_Verdaux = typename ELFT::Verdaux;                                  \
   using Elf_CGProfile = typename ELFT::CGProfile;                              \
+  using Elf_R2CInfo = typename ELFT::R2CInfo;                                  \
   using uintX_t = typename ELFT::uint;
 
 namespace {
@@ -233,6 +234,7 @@ public:
   void printHashHistograms() override;
 
   void printCGProfile() override;
+  void printR2CInfo() override;
   void printAddrsig() override;
 
   void printNotes() override;
@@ -293,6 +295,7 @@ private:
   const Elf_GnuHash *GnuHashTable = nullptr;
   const Elf_Shdr *DotSymtabSec = nullptr;
   const Elf_Shdr *DotCGProfileSec = nullptr;
+  const Elf_Shdr *DotR2CInfoSec = nullptr;
   const Elf_Shdr *DotAddrsigSec = nullptr;
   StringRef DynSymtabName;
   ArrayRef<Elf_Word> ShndxTable;
@@ -353,6 +356,7 @@ public:
 
   const Elf_Shdr *getDotSymtabSec() const { return DotSymtabSec; }
   const Elf_Shdr *getDotCGProfileSec() const { return DotCGProfileSec; }
+  const Elf_Shdr *getDotR2CInfoSec() const { return DotR2CInfoSec; }
   const Elf_Shdr *getDotAddrsigSec() const { return DotAddrsigSec; }
   ArrayRef<Elf_Word> getShndxTable() const { return ShndxTable; }
   StringRef getDynamicStringTable() const { return DynamicStringTable; }
@@ -769,6 +773,7 @@ public:
                                              const Elf_Shdr *Sec) = 0;
   virtual void printHashHistograms(const ELFFile<ELFT> *Obj) = 0;
   virtual void printCGProfile(const ELFFile<ELFT> *Obj) = 0;
+  virtual void printR2CInfo(const ELFFile<ELFT> *Obj) = 0;
   virtual void printAddrsig(const ELFFile<ELFT> *Obj) = 0;
   virtual void printNotes(const ELFFile<ELFT> *Obj) = 0;
   virtual void printELFLinkerOptions(const ELFFile<ELFT> *Obj) = 0;
@@ -838,6 +843,7 @@ public:
                                      const Elf_Shdr *Sec) override;
   void printHashHistograms(const ELFFile<ELFT> *Obj) override;
   void printCGProfile(const ELFFile<ELFT> *Obj) override;
+  void printR2CInfo(const ELFFile<ELFT> *Obj) override;
   void printAddrsig(const ELFFile<ELFT> *Obj) override;
   void printNotes(const ELFFile<ELFT> *Obj) override;
   void printELFLinkerOptions(const ELFFile<ELFT> *Obj) override;
@@ -966,6 +972,7 @@ public:
                                      const Elf_Shdr *Sec) override;
   void printHashHistograms(const ELFFile<ELFT> *Obj) override;
   void printCGProfile(const ELFFile<ELFT> *Obj) override;
+  void printR2CInfo(const ELFFile<ELFT> *Obj) override;
   void printAddrsig(const ELFFile<ELFT> *Obj) override;
   void printNotes(const ELFFile<ELFT> *Obj) override;
   void printELFLinkerOptions(const ELFFile<ELFT> *Obj) override;
@@ -2101,6 +2108,10 @@ ELFDumper<ELFT>::ELFDumper(const object::ELFObjectFile<ELFT> *ObjF,
       if (!DotCGProfileSec)
         DotCGProfileSec = &Sec;
       break;
+    case ELF::SHT_LLVM_R2C_INFO:
+      if (!DotR2CInfoSec)
+        DotR2CInfoSec = &Sec;
+      break;
     case ELF::SHT_LLVM_ADDRSIG:
       if (!DotAddrsigSec)
         DotAddrsigSec = &Sec;
@@ -2368,6 +2379,11 @@ template <class ELFT> void ELFDumper<ELFT>::printHashHistograms() {
 template <class ELFT> void ELFDumper<ELFT>::printCGProfile() {
   ELFDumperStyle->printCGProfile(ObjF->getELFFile());
 }
+
+template <class ELFT> void ELFDumper<ELFT>::printR2CInfo() {
+  ELFDumperStyle->printR2CInfo(ObjF->getELFFile());
+}
+
 
 template <class ELFT> void ELFDumper<ELFT>::printNotes() {
   ELFDumperStyle->printNotes(ObjF->getELFFile());
@@ -4908,6 +4924,11 @@ void GNUStyle<ELFT>::printCGProfile(const ELFFile<ELFT> *Obj) {
 }
 
 template <class ELFT>
+void GNUStyle<ELFT>::printR2CInfo(const ELFFile<ELFT> *Obj) {
+  OS << "GNUStyle::printR2CInfo not implemented\n";
+}
+
+template <class ELFT>
 void GNUStyle<ELFT>::printAddrsig(const ELFFile<ELFT> *Obj) {
   reportError(createError("--addrsig: not implemented"), this->FileName);
 }
@@ -6684,6 +6705,30 @@ void LLVMStyle<ELFT>::printCGProfile(const ELFFile<ELFT> *Obj) {
     W.printNumber("To", this->dumper()->getStaticSymbolName(CGPE.cgp_to),
                   CGPE.cgp_to);
     W.printNumber("Weight", CGPE.cgp_weight);
+  }
+}
+
+template <class ELFT>
+void LLVMStyle<ELFT>::printR2CInfo(const ELFFile<ELFT> *Obj) {
+  ListScope L(W, "R2CInfo");
+  if (!this->dumper()->getDotR2CInfoSec())
+    return;
+
+  Expected<ArrayRef<Elf_R2CInfo >> R2CInfoOrErr =
+      Obj->template getSectionContentsAsArray<Elf_R2CInfo>(
+          this->dumper()->getDotR2CInfoSec());
+  if (!R2CInfoOrErr) {
+    this->reportUniqueWarning(
+        createError("unable to dump the SHT_LLVM_R2C_INFO section: " +
+                    toString(R2CInfoOrErr.takeError())));
+    return;
+  }
+
+  for (const Elf_R2CInfo &RIE : *R2CInfoOrErr) {
+    DictScope D(W, "R2CInfoEntry");
+    W.printNumber("Function", this->dumper()->getStaticSymbolName(RIE.radi_fun),
+                  RIE.radi_fun);
+    W.printNumber("Count", RIE.radi_count);
   }
 }
 

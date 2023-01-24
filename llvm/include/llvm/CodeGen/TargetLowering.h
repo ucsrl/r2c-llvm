@@ -3703,6 +3703,11 @@ public:
       return *this;
     }
 
+    CallLoweringInfo &setCallInst(const CallInst *I) {
+      CB = I;
+      return *this;
+    }
+
     CallLoweringInfo &setChain(SDValue InChain) {
       Chain = InChain;
       return *this;

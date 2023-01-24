@@ -363,6 +363,10 @@ void MCELFStreamer::emitCGProfileEntry(const MCSymbolRefExpr *From,
   getAssembler().CGProfile.push_back({From, To, Count});
 }
 
+void MCELFStreamer::emitR2CInfoEntry(const MCSymbolRefExpr *From, uint32_t Count) {
+  getAssembler().R2CInfo.push_back({From, Count});
+}
+
 void MCELFStreamer::emitIdent(StringRef IdentString) {
   MCSection *Comment = getAssembler().getContext().getELFSection(
       ".comment", ELF::SHT_PROGBITS, ELF::SHF_MERGE | ELF::SHF_STRINGS, 1, "");
@@ -489,6 +493,16 @@ void MCELFStreamer::finalizeCGProfile() {
   for (MCAssembler::CGProfileEntry &E : getAssembler().CGProfile) {
     finalizeCGProfileEntry(E.From);
     finalizeCGProfileEntry(E.To);
+  }
+}
+
+void MCELFStreamer::finalizeR2CInfo() {
+  for (MCAssembler::R2CInfoEntry &E : getAssembler().R2CInfo) {
+    const MCSymbol *S = &E.F->getSymbol();
+    assert(!S->isTemporary() && "R2C Info function cannot be a temporary symbol");
+    bool Created;
+    getAssembler().registerSymbol(*S, &Created);
+    assert(!Created && "R2C Info function must have existed before registration");
   }
 }
 
@@ -672,6 +686,7 @@ void MCELFStreamer::finishImpl() {
   setSectionAlignmentForBundling(getAssembler(), CurSection);
 
   finalizeCGProfile();
+  finalizeR2CInfo();
   emitFrames(nullptr);
 
   this->MCObjectStreamer::finishImpl();

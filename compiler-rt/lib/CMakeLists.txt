@@ -65,3 +65,5 @@ endif()
 # is true for fuzzers that exercise parts of the runtime. So we add the fuzzer
 # directories explicitly here.
 add_subdirectory(scudo/standalone/fuzz)
+
+add_subdirectory(r2c)

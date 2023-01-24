@@ -390,6 +390,7 @@ enum Kind {
   kw_returnDoesNotAlias,
   kw_noInline,
   kw_alwaysInline,
+  kw_R2C,
   kw_calls,
   kw_callee,
   kw_params,

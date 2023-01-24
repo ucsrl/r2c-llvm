@@ -51,6 +51,13 @@ else()
   set(Z3_LINK_FILES "")
 endif()
 
+# If libcrypto is available, link for RandomNumberGenerator
+if ( ${HAVE_OPENSSL} )
+  include_directories(${OPENSSL_INCLUDE_DIR})
+  set(system_libs ${system_libs} ${OPENSSL_LIBRARIES})
+endif()
+
+
 add_llvm_component_library(LLVMSupport
   AArch64TargetParser.cpp
   ABIBreak.cpp

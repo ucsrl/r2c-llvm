@@ -12,7 +12,7 @@
 // information, so some things cannot be determined statically.
 //
 //===----------------------------------------------------------------------===//
-
+#include "llvm/IR/Module.h"
 #include "llvm/CodeGen/RegisterClassInfo.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/BitVector.h"
@@ -43,6 +43,11 @@ RegisterClassInfo::RegisterClassInfo() = default;
 void RegisterClassInfo::runOnMachineFunction(const MachineFunction &mf) {
   bool Update = false;
   MF = &mf;
+
+  if (!RNG) {
+    RNG.reset(MF->getFunction().getParent()->createRNG(nullptr));
+  }
+
 
   // Allocate new array the first time we see a new target.
   if (MF->getSubtarget().getRegisterInfo() != TRI) {
@@ -126,6 +131,7 @@ void RegisterClassInfo::compute(const TargetRegisterClass *RC) const {
       LastCost = Cost;
     }
   }
+  RCI.CSRStart = N;
   RCI.NumRegs = N + CSRAlias.size();
   assert(RCI.NumRegs <= NumRegs && "Allocation order larger than regclass");
 
@@ -191,4 +197,23 @@ unsigned RegisterClassInfo::computePSetLimit(unsigned Idx) const {
   unsigned NReserved = RC->getNumRegs() - getNumAllocatableRegs(RC);
   return TRI->getRegPressureSetLimit(*MF, Idx) -
          TRI->getRegClassWeight(RC).RegWeight * NReserved;
+}
+
+void RegisterClassInfo::randomize(const TargetRegisterClass *RC) const {
+  RCInfo &RCI = RegClass[RC->getID()];
+
+  // Keep the CSRs at the end and randomize each group separately
+  MCPhysReg *Order = RCI.Order.get();
+  RNG->shuffle(Order, RCI.CSRStart);
+  if (RCI.CSRStart < RCI.NumRegs) {
+    MCPhysReg *CSROrder = Order + (RCI.CSRStart + 1);
+    RNG->shuffle(CSROrder, RCI.NumRegs - RCI.CSRStart - 1);
+  }
+  LLVM_DEBUG({
+    dbgs() << "AllocationOrderAfterRandomizing(" << TRI->getRegClassName(RC)
+           << ") = [";
+    for (unsigned I = 0; I != RCI.NumRegs; ++I)
+      dbgs() << ' ' << printReg(RCI.Order[I], TRI);
+    dbgs() << (RCI.ProperSubClass ? " ] (sub-class)\n" : " ]\n");
+  });
 }

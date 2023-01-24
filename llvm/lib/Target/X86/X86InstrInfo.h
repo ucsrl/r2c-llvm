@@ -423,6 +423,13 @@ public:
 
   void getNoop(MCInst &NopInst) const override;
 
+  void insertNoop(MachineBasicBlock &MBB,
+                  MachineBasicBlock::iterator MI) const override;
+
+  void insertNoop(MachineBasicBlock &MBB,
+                  MachineBasicBlock::iterator MI,
+                  RandomNumberGenerator &RNG) const override;
+
   bool
   reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const override;
 

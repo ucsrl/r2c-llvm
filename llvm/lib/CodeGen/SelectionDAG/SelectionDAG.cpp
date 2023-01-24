@@ -6400,7 +6400,8 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                 SDValue Src, SDValue Size, Align Alignment,
                                 bool isVol, bool AlwaysInline, bool isTailCall,
                                 MachinePointerInfo DstPtrInfo,
-                                MachinePointerInfo SrcPtrInfo) {
+                                MachinePointerInfo SrcPtrInfo,
+                                const CallInst *I) {
   // Check to see if we should lower the memcpy to loads and stores first.
   // For cases within the target-specified limits, this is the best choice.
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
@@ -6463,7 +6464,8 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                       TLI->getPointerTy(getDataLayout())),
                     std::move(Args))
       .setDiscardResult()
-      .setTailCall(isTailCall);
+      .setTailCall(isTailCall)
+      .setCallInst(I);
 
   std::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
   return CallResult.second;
@@ -6514,7 +6516,8 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                  SDValue Src, SDValue Size, Align Alignment,
                                  bool isVol, bool isTailCall,
                                  MachinePointerInfo DstPtrInfo,
-                                 MachinePointerInfo SrcPtrInfo) {
+                                 MachinePointerInfo SrcPtrInfo,
+                                 const CallInst *I) {
   // Check to see if we should lower the memmove to loads and stores first.
   // For cases within the target-specified limits, this is the best choice.
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
@@ -6565,7 +6568,8 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                       TLI->getPointerTy(getDataLayout())),
                     std::move(Args))
       .setDiscardResult()
-      .setTailCall(isTailCall);
+      .setTailCall(isTailCall)
+      .setCallInst(I);
 
   std::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
   return CallResult.second;
@@ -6615,7 +6619,8 @@ SDValue SelectionDAG::getAtomicMemmove(SDValue Chain, const SDLoc &dl,
 SDValue SelectionDAG::getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                 SDValue Src, SDValue Size, Align Alignment,
                                 bool isVol, bool isTailCall,
-                                MachinePointerInfo DstPtrInfo) {
+                                MachinePointerInfo DstPtrInfo,
+                                const CallInst *I) {
   // Check to see if we should lower the memset to stores first.
   // For cases within the target-specified limits, this is the best choice.
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
@@ -6665,7 +6670,8 @@ SDValue SelectionDAG::getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                       TLI->getPointerTy(getDataLayout())),
                     std::move(Args))
       .setDiscardResult()
-      .setTailCall(isTailCall);
+      .setTailCall(isTailCall)
+      .setCallInst(I);
 
   std::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
   return CallResult.second;

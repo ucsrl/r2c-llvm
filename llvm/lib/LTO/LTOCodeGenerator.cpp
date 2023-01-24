@@ -125,6 +125,8 @@ LTOCodeGenerator::~LTOCodeGenerator() {}
 void LTOCodeGenerator::initializeLTOPasses() {
   PassRegistry &R = *PassRegistry::getPassRegistry();
 
+  initializeDiversityPassPass(R);
+  initializeCollectStatisticsPass(R);
   initializeInternalizeLegacyPassPass(R);
   initializeIPSCCPLegacyPassPass(R);
   initializeGlobalOptLegacyPassPass(R);

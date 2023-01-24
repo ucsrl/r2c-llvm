@@ -49,6 +49,7 @@ subdirectories =
  Testing
  ToolDrivers
  Transforms
+ R2COptions
  WindowsManifest
  XRay
 

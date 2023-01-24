@@ -47,6 +47,7 @@
 #include <cassert>
 #include <tuple>
 #include <vector>
+#include <signal.h>
 
 using namespace llvm;
 
@@ -1302,6 +1303,9 @@ bool RegAllocFast::runOnMachineFunction(MachineFunction &MF) {
   RegClassInfo.runOnMachineFunction(MF);
   UsedInInstr.clear();
   UsedInInstr.setUniverse(TRI->getNumRegUnits());
+
+//  if (MF.getName() == "quantum_get_state")
+//    raise(SIGTRAP);
 
   // initialize the virtual->physical register map to have a 'null'
   // mapping for all virtual registers

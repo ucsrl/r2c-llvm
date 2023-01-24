@@ -449,7 +449,7 @@ bool SelectionDAGISel::runOnMachineFunction(MachineFunction &mf) {
   LLVM_DEBUG(dbgs() << "\n\n\n=== " << Fn.getName() << "\n");
 
   SplitCriticalSideEffectEdges(const_cast<Function &>(Fn), DT, LI);
-
+  
   CurDAG->init(*MF, *ORE, this, LibInfo,
                getAnalysisIfAvailable<LegacyDivergenceAnalysis>(), PSI, BFI);
   FuncInfo->set(Fn, *MF, CurDAG);

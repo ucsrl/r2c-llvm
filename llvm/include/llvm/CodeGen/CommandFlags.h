@@ -59,6 +59,9 @@ bool getEnableNoNaNsFPMath();
 
 bool getEnableNoSignedZerosFPMath();
 
+bool getNoopInsertion();
+Optional<bool> getExplicitNoopInsertion();
+
 bool getEnableNoTrappingFPMath();
 
 DenormalMode::DenormalModeKind getDenormalFPMath();

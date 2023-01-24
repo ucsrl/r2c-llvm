@@ -93,6 +93,12 @@ def SDT_X86CallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>,
 
 def SDT_X86Call   : SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
 
+def SDT_X86RadSetup   : SDTypeProfile<0, -1, [SDTCisVT<0, i32>,
+                                              SDTCisVT<1, i32>]>;
+
+def SDT_X86RadTeardown   : SDTypeProfile<0, 1, [SDTCisVT<0, i32>]>;
+
+
 def SDT_X86NtBrind : SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
 
 def SDT_X86VASTART_SAVE_XMM_REGS : SDTypeProfile<0, -1, [SDTCisVT<0, i8>,
@@ -203,6 +209,20 @@ def X86callseq_start :
 def X86callseq_end :
                  SDNode<"ISD::CALLSEQ_END",   SDT_X86CallSeqEnd,
                         [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
+
+def X86rad_setup : SDNode<"X86ISD::BTRA_SETUP", SDT_X86RadSetup,
+                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
+                             SDNPVariadic]>;
+
+def X86rad_setup_with_fp : SDNode<"X86ISD::BTRA_SETUP_WITH_FP", SDT_X86RadSetup,
+                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
+                             SDNPVariadic]>;
+
+def X86rad_teardown : SDNode<"X86ISD::BTRA_TEARDOWN", SDT_X86RadTeardown,
+                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
+
+def X86rad_teardown_with_fp : SDNode<"X86ISD::BTRA_TEARDOWN_WITH_FP", SDT_X86RadTeardown,
+                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
 def X86call    : SDNode<"X86ISD::CALL",     SDT_X86Call,
                         [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,

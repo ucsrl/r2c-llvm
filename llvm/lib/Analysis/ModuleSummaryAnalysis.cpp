@@ -465,11 +465,13 @@ static void computeFunctionSummary(
   FunctionSummary::FFlags FunFlags{
       F.hasFnAttribute(Attribute::ReadNone),
       F.hasFnAttribute(Attribute::ReadOnly),
-      F.hasFnAttribute(Attribute::NoRecurse), F.returnDoesNotAlias(),
+      F.hasFnAttribute(Attribute::NoRecurse),
+      F.returnDoesNotAlias(),
       // FIXME: refactor this to use the same code that inliner is using.
       // Don't try to import functions with noinline attribute.
       F.getAttributes().hasFnAttribute(Attribute::NoInline),
-      F.hasFnAttribute(Attribute::AlwaysInline)};
+      F.hasFnAttribute(Attribute::AlwaysInline),
+      F.hasFnAttribute("diversity-btra-candidate")};
   std::vector<FunctionSummary::ParamAccess> ParamAccesses;
   if (auto *SSI = GetSSICallback(F))
     ParamAccesses = SSI->getParamAccesses();
@@ -714,7 +716,8 @@ ModuleSummaryIndex llvm::buildModuleSummaryIndex(
                         F->hasFnAttribute(Attribute::NoRecurse),
                         F->returnDoesNotAlias(),
                         /* NoInline = */ false,
-                        F->hasFnAttribute(Attribute::AlwaysInline)},
+                        F->hasFnAttribute(Attribute::AlwaysInline),
+                        F->hasFnAttribute("diversity-btra-candidate")},
                     /*EntryCount=*/0, ArrayRef<ValueInfo>{},
                     ArrayRef<FunctionSummary::EdgeTy>{},
                     ArrayRef<GlobalValue::GUID>{},

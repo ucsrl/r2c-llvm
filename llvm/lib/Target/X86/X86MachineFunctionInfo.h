@@ -31,6 +31,13 @@ class X86MachineFunctionInfo : public MachineFunctionInfo {
   /// contains stack pointer re-alignment code which requires FP.
   bool ForceFramePointer = false;
 
+  bool HasBTRACalls = false;
+  bool CallerPreparedFP = false;
+  MachineInstr *CurrentCallFrameStart = nullptr;
+
+  Optional<int> CallerFPSpillSlotFI;
+  Optional<int> SPRestoreSpillslotFI;
+
   /// RestoreBasePointerOffset - Non-zero if the function has base pointer
   /// and makes call to llvm.eh.sjlj.setjmp. When non-zero, the value is a
   /// displacement from the frame pointer to a slot where the base pointer
@@ -117,6 +124,9 @@ private:
   /// that must be forwarded to every musttail call.
   SmallVector<ForwardedRegister, 1> ForwardedMustTailRegParms;
 
+  SmallVector<int, 5> DummyPointerFIs;
+
+  int AfterDecoySpace = 0;
 public:
   X86MachineFunctionInfo() = default;
 
@@ -124,6 +134,26 @@ public:
 
   bool getForceFramePointer() const { return ForceFramePointer;}
   void setForceFramePointer(bool forceFP) { ForceFramePointer = forceFP; }
+
+  bool getHasBTRACalls() const { return HasBTRACalls; }
+  void setHasBTRACalls(bool BTRACalls) { HasBTRACalls = BTRACalls;}
+
+  bool getCallerPreparedFP() const { return CallerPreparedFP; }
+  void setCallerPreparedFP(bool CallerFP) { CallerPreparedFP = CallerFP;}
+
+  Optional<int> getCallerFPSpillSlotFI() const { return CallerFPSpillSlotFI; }
+  void setCallerFPSpillSlotFI(int Idx) { CallerFPSpillSlotFI = Idx;}
+
+  Optional<int> getSPRestoreSpillSlotFI() const { return SPRestoreSpillslotFI; }
+  void setSPRestoreSpillSlotFI(int Idx) { SPRestoreSpillslotFI = Idx;}
+
+  const SmallVectorImpl<int> &getDummyPointerSlotFIs() const { return DummyPointerFIs; }
+  void addDummyPointerSlotFI(int FrameIndex) { DummyPointerFIs.push_back(FrameIndex); }
+
+  unsigned getNumAfterDecoys(const MachineFunction *MF) const;
+
+  int getDecoyOffset(const MachineFunction *MF) const { return AfterDecoySpace; }
+  void setDecoyOffset(MachineFunction *MF, int V) { AfterDecoySpace = V;}
 
   bool getHasPushSequences() const { return HasPushSequences; }
   void setHasPushSequences(bool HasPush) { HasPushSequences = HasPush; }
@@ -223,6 +253,9 @@ public:
     assert(!PreallocatedArgOffsets[Id].empty() && "arg offsets not set");
     return PreallocatedArgOffsets[Id];
   }
+
+  void setCurrentCallFrameStart(MachineInstr *I) { CurrentCallFrameStart = I; }
+  MachineInstr *getCurrentCallFrameStart() const { return CurrentCallFrameStart; }
 };
 
 } // End llvm namespace
